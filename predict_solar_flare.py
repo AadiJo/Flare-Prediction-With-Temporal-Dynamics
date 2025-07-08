@@ -15,17 +15,15 @@ from rich import box
 # Initialize Rich console
 console = Console()
 
-def load_latest_model(models_dir="models"):
-    """Load the most recent model from the models directory."""
+def list_model_subdirectories(models_dir="models"):
+    """List all subdirectories in the models directory."""
     if not os.path.exists(models_dir):
         console.print(f"[red]Models directory '{models_dir}' not found.[/red]")
         return None
     
-    # List all model FILES (not directories) with .keras or .h5 endings
-    model_files = [f for f in os.listdir(models_dir) 
-                  if os.path.isfile(os.path.join(models_dir, f)) and 
-                  f.startswith("solar_flare_model_") and 
-                  (f.endswith(".keras") or f.endswith(".h5"))]
+    # Search for .keras files in the subdirectory
+    model_files = [f for f in os.listdir(subdir_path) 
+                   if f.endswith(".keras") and os.path.isfile(os.path.join(subdir_path, f))]
     
     if not model_files:
         console.print("[red]No saved models found.[/red]")
@@ -64,18 +62,10 @@ def load_specific_model(model_name, models_dir="models"):
     console.print(f"[green]Loading model from:[/green] {model_path}")
     return load_model(model_path), model_name
 
-def predict_solar_flare(model, input_data):
-    """Make predictions using the loaded model."""
-    predictions = model.predict(input_data)
-    return predictions
-
-def load_test_data(model_name, models_dir="models"):
-    """Load the test data saved during model training."""
-    # Strip file extension if present
-    model_name = os.path.splitext(model_name)[0]
-    
-    artifacts_dir = os.path.join(models_dir, model_name)
-    test_data_path = os.path.join(artifacts_dir, 'test_set.npz')
+def load_test_data_from_subdir(subdir_name, models_dir="models"):
+    """Load the test data from a specific subdirectory."""
+    subdir_path = os.path.join(models_dir, subdir_name)
+    test_data_path = os.path.join(subdir_path, 'test_set.npz')
     
     if not os.path.exists(test_data_path):
         console.print(f"[red]Test data not found at {test_data_path}[/red]")
