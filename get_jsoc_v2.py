@@ -8,6 +8,7 @@ import json
 load_dotenv()
 # SEGMENTS = ["magnetogram", "continuum", "Dopplergram"]
 ONLY_GET_NON_FLARE_DATA = False
+
 PROGRESS_FILE = "download_progress.json"
 
 def download_sharp_time_series(harpnum, time_points, base_dir="sharp_cnn_lstm_data", single_file_per_step=False): 
@@ -125,6 +126,7 @@ def main():
 
     NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 100, 100
     TIME_STEPS, HOURS_BETWEEN_STEPS = 6, 1  # Add hours between steps later if needed
+
     PREDICTION_HORIZON = 12  # 12 hours before flare
     SINGLE_FILE_PER_STEP = False
 
@@ -214,3 +216,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
