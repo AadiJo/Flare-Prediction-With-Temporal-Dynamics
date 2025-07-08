@@ -16,6 +16,9 @@ IMAGE_HEIGHT = 64
 IMAGE_WIDTH = 64
 SEQUENCE_LENGTH = 6  # Changed to match your 6 timesteps
 
+rising = 0
+falling = 0
+
 # Instead of hardcoding segments, we'll detect available ones
 # These are preferred if available
 PREFERRED_SEGMENTS = ["Bp", "Bt", "Br", "continuum"]
@@ -225,13 +228,19 @@ def process_reorganized_data(data_dir="sharp_cnn_lstm_data"):
             sequence_images = [item[1] for item in timestep_data]
             sequence_array = np.stack(sequence_images)
 
+            # Determine solar cycle phase based on the first timestamp
+            first_timestamp = timestep_data[0][0]
+            solar_cycle_phase = get_solar_cycle_phase(first_timestamp)
+
             # Add the processed sequence to our dataset
             processed_data.append({
                 'case': case_folder.name,
                 'sequence': sequence_array,
-                'label': label
+                'label': label,
+                'solar_cycle_phase': solar_cycle_phase,
+                'timestamp': first_timestamp
             })
-            print(f"  ✓ Processed {case_folder.name}: {sequence_array.shape}, label={label}")
+            print(f"  ✓ Processed {case_folder.name}: {sequence_array.shape}, label={label}, solar_cycle={solar_cycle_phase}")
         else:
             print(f"  ✗ Skipped {case_folder.name}: only {len(timestep_data)}/{len(timestep_folders)} valid timesteps")
 
@@ -245,14 +254,20 @@ def create_final_dataset(processed_data):
     """
     if not processed_data:
         print("No processed data to convert!")
-        return None, None
+        return None, None, None
 
     X = []
     y = []
+    metadata = []
 
     for item in processed_data:
         X.append(item['sequence'])
         y.append(item['label'])
+        metadata.append({
+            'case': item['case'],
+            'solar_cycle_phase': item['solar_cycle_phase'],
+            'timestamp': item['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+        })
 
     X_array = np.array(X)
     y_array = np.array(y)
@@ -267,7 +282,58 @@ def create_final_dataset(processed_data):
     unique_values, counts = np.unique(y_array, return_counts=True)
     print(f"Class distribution: {dict(zip(unique_values, counts))}")
 
-    return X_array, y_array
+    # Print solar cycle phase distribution
+    solar_phases = [item['solar_cycle_phase'] for item in metadata]
+    from collections import Counter
+    phase_counts = Counter(solar_phases)
+    print(f"Solar cycle phase distribution: {dict(phase_counts)}")
+
+    return X_array, y_array, metadata
+
+
+def get_solar_cycle_phase(timestamp):
+    """
+    Determine if the given timestamp is in the rising or falling phase of the solar cycle.
+    Based on historical solar cycle data.
+
+    Solar Cycle minima and maxima (approximate dates):
+    - Cycle 23: Min ~1996.4, Max ~2000.3, Min ~2008.9
+    - Cycle 24: Min ~2008.9, Max ~2014.3, Min ~2019.8
+    - Cycle 25: Min ~2019.8, Max ~2025.7 (predicted), Min ~2030 (predicted)
+
+    Args:
+        timestamp (datetime): The timestamp to check
+
+    Returns:
+        str: 'rising' or 'falling'
+    """
+    year = timestamp.year + (timestamp.month - 1) / 12.0  # Convert to decimal year
+
+    # Define solar cycle periods with their minima and maxima
+    solar_cycles = [
+        {'cycle': 23, 'min_start': 1996.4, 'max': 2000.3, 'min_end': 2008.9},
+        {'cycle': 24, 'min_start': 2008.9, 'max': 2014.3, 'min_end': 2019.8},
+        {'cycle': 25, 'min_start': 2019.8, 'max': 2025.7, 'min_end': 2030.0},  # Predicted
+    ]
+
+    # Find which solar cycle the timestamp belongs to
+    for cycle in solar_cycles:
+        if cycle['min_start'] <= year <= cycle['min_end']:
+            # Check if we're in rising or falling phase
+            if year <= cycle['max']:
+                return 'rising'
+            else:
+                return 'falling'
+
+    # If outside defined cycles, make a reasonable assumption
+    # Most data in the dataset appears to be from 2011, which is cycle 24 falling phase
+    if year < 1996.4:
+        return 'falling'  # Assume falling for very old data
+    elif year > 2030.0:
+        return 'rising'   # Assume rising for future data
+    else:
+        # Fallback: if we can't determine, assume falling
+        return 'falling'
 
 
 if __name__ == "__main__":
@@ -278,12 +344,13 @@ if __name__ == "__main__":
         print("No data was processed successfully. Exiting.")
     else:
         # Create the final dataset
-        X_final, y_final = create_final_dataset(processed_data)
+        X_final, y_final, metadata = create_final_dataset(processed_data)
 
         if X_final is not None and X_final.size > 0:
             print(f"\nFinal dataset shapes: X={X_final.shape}, y={y_final.shape}")
-            np.savez_compressed(OUTPUT_FILE, X=X_final, y=y_final)
-            print(f"Successfully saved processed data to '{OUTPUT_FILE}'")
+            print(f"Metadata entries: {len(metadata)}")
+            np.savez_compressed(OUTPUT_FILE, X=X_final, y=y_final, metadata=metadata)
+            print(f"Successfully saved processed data with metadata to '{OUTPUT_FILE}'")
 
             # Verify the output format matches what the model expects
             # The shape should be [n_samples, n_timesteps, height, width, channels]
@@ -292,6 +359,16 @@ if __name__ == "__main__":
                   f"height={X_final.shape[2]}, "
                   f"width={X_final.shape[3]}, "
                   f"channels={X_final.shape[4]}]")
+
+            # Show sample metadata entries
+            if metadata:
+                print(f"\nSample metadata entries:")
+                for i, meta in enumerate(metadata[:3]):  # Show first 3 entries
+                    print(f"  {i+1}. Case: {meta['case']}, "
+                          f"Solar cycle: {meta['solar_cycle_phase']}, "
+                          f"Timestamp: {meta['timestamp']}")
+                if len(metadata) > 3:
+                    print(f"  ... and {len(metadata) - 3} more entries")
 
             # Make sure we have enough samples to train a model
             if X_final.shape[0] < 10:
