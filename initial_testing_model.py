@@ -1,12 +1,15 @@
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
-from imblearn.over_sampling import RandomOverSampler
+from sklearn.utils.class_weight import compute_class_weight  # Add this import
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, TimeDistributed, LSTM, Dense, Dropout
+from tensorflow.keras.callbacks import EarlyStopping  # Add this import
+from imblearn.over_sampling import RandomOverSampler  # Add this import at the top
 import os
 from datetime import datetime
 import json
+import shutil  # Add this import for file copying
 
 def load_latest_model(models_dir="models"):
     """Load the most recent model from the models directory."""
@@ -46,20 +49,33 @@ print(f"Found {len(unique_classes)} unique classes in the labels: {unique_classe
 
 # Checks, and fixes, if the data is imbalanced
 if len(unique_classes) > 1:
-    print("Balancing the dataset...")
-    X_reshaped = X.reshape(X.shape[0], -1)
-    ros = RandomOverSampler(random_state=42)
-    X_resampled, y_resampled = ros.fit_resample(X_reshaped, y)
-    X_balanced = X_resampled.reshape(-1, X.shape[1], X.shape[2], X.shape[3], X.shape[4])
-    print(f"Dataset balanced. New shapes: X={X_balanced.shape}, y={y_resampled.shape}")
-
-    print("Splitting data into training, validation, and test sets...")
+    # Option 1: Using class weights (preferred approach)
+    print("Computing class weights for balanced training...")
+    class_weights = compute_class_weight('balanced', classes=np.unique(y), y=y)
+    class_weight_dict = dict(zip(np.unique(y).astype(int), class_weights))
+    print(f"Using class weights: {class_weight_dict}")
+    
+    # Normal data splitting without oversampling
     X_train, X_temp, y_train, y_temp = train_test_split(
-        X_balanced, y_resampled, test_size=0.3, random_state=42, stratify=y_resampled
+        X, y, test_size=0.3, random_state=42, stratify=y
     )
     X_val, X_test, y_val, y_test = train_test_split(
         X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp
     )
+    
+    # Option 2 (alternative): Using RandomOverSampler (I think for now we don't need this)
+    # print("Balancing the dataset with RandomOverSampler...")
+    # X_reshaped = X.reshape(X.shape[0], -1)
+    # ros = RandomOverSampler(random_state=42)
+    # X_resampled, y_resampled = ros.fit_resample(X_reshaped, y)
+    # X_balanced = X_resampled.reshape(-1, X.shape[1], X.shape[2], X.shape[3], X.shape[4])
+    # X_train, X_temp, y_train, y_temp = train_test_split(
+    #     X_balanced, y_resampled, test_size=0.3, random_state=42, stratify=y_resampled
+    # )
+    # X_val, X_test, y_val, y_test = train_test_split(
+    #     X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp
+    # )
+    # class_weight_dict = None  # Not needed when using oversampling
     
     print(f"Training set size:   {len(X_train)}")
     print(f"Validation set size: {len(X_val)}")
@@ -80,15 +96,20 @@ model_input_shape = (X_train.shape[1], X_train.shape[2], X_train.shape[3], X_tra
 # The model uses TimeDistributed layers to apply CNNs to each time step of the input sequence
 def create_cnnlstm_model(input_shape):
     model = Sequential(name="Solar_Flare_Predictor_v1")
-    model.add(TimeDistributed(Conv2D(32, (3, 3), activation='relu'), input_shape=input_shape))
+    # Add L2 regularization to Conv2D layers
+    model.add(TimeDistributed(Conv2D(32, (3, 3), activation='relu',
+                                     kernel_regularizer=tf.keras.regularizers.l2(0.001)), 
+                             input_shape=input_shape))
     model.add(TimeDistributed(MaxPooling2D((2, 2))))
     model.add(TimeDistributed(Dropout(0.25)))
-    model.add(TimeDistributed(Conv2D(64, (3, 3), activation='relu')))
+    model.add(TimeDistributed(Conv2D(64, (3, 3), activation='relu',
+                                     kernel_regularizer=tf.keras.regularizers.l2(0.001))))
     model.add(TimeDistributed(MaxPooling2D((2, 2))))
     model.add(TimeDistributed(Dropout(0.25)))
     # Flatten the output of the CNN layers before passing to LSTM
     model.add(TimeDistributed(Flatten()))
-    model.add(LSTM(50, activation='relu'))
+    # Add recurrent_dropout to LSTM
+    model.add(LSTM(50, activation='relu', recurrent_dropout=0.2))
     model.add(Dropout(0.5))
     # Output layer for binary classification (solar flare or not)
     model.add(Dense(1, activation='sigmoid'))
@@ -105,12 +126,23 @@ print("Starting model training...")
 
 validation_data = (X_val, y_val) if X_val.size > 0 else None
 
+# ADD early stopping
+early_stopping = EarlyStopping(
+    monitor='val_loss',
+    patience=3,
+    restore_best_weights=True,
+    verbose=1
+)
+
+# MODIFY the model.fit call to include callbacks and class weights
 history = model.fit(
     X_train,
     y_train,
-    epochs=5,
+    epochs=10,  # Increase epochs since we have early stopping
     batch_size=8,
     validation_data=validation_data,
+    class_weight=class_weight_dict,  # Add class weights
+    callbacks=[early_stopping],  # Add early stopping
     verbose=1
 )
 
@@ -136,6 +168,11 @@ print(f"Model saved to: {model_path}")
 # Create a folder for additional model artifacts
 model_artifacts_dir = os.path.join(models_dir, model_name)
 os.makedirs(model_artifacts_dir, exist_ok=True)
+
+# Save a copy of the model file in the model-specific directory
+model_copy_path = os.path.join(model_artifacts_dir, f"{model_name}.keras")
+shutil.copy2(model_path, model_copy_path)
+print(f"Model copy saved to: {model_copy_path}")
 
 # Save training history in the artifacts directory
 history_dict = history.history
@@ -163,12 +200,28 @@ if X_test.size > 0:
     unique, counts = np.unique(predicted_classes, return_counts=True)
     class_distribution = dict(zip(unique, counts))
     print(f"Predicted class distribution: {class_distribution}")
+    
+    # Calculate confusion matrix for TSS
+    from sklearn.metrics import confusion_matrix, classification_report
+    cm = confusion_matrix(y_test, predicted_classes)
+    print("Confusion Matrix:")
+    print(cm)
+    
+    # Calculate True Skill Statistic (TSS)
+    tn, fp, fn, tp = cm.ravel()
+    tss = tp/(tp+fn) - fp/(fp+tn)
+    print(f"True Skill Statistic (TSS): {tss:.4f}")
+    
+    # Generate detailed classification metrics
+    print("\nClassification Report:")
+    print(classification_report(y_test, predicted_classes))
 else:
     print("No test set to evaluate. Evaluation skipped.")
 
 # Save the testing set for future use
 if X_test.size > 0:
-    test_set_path = os.path.join(models_dir, 'test_set2.npz')
+    # Save the test set in the model artifacts directory
+    test_set_path = os.path.join(model_artifacts_dir, 'test_set.npz')
     np.savez_compressed(test_set_path, X_test=X_test, y_test=y_test)
     print(f"Testing set saved to: {test_set_path}")
 else:
@@ -182,26 +235,3 @@ if X_val.size > 0:
     print(f"Validation Set Loss: {val_loss:.4f}")
 else:
     print("No validation set available for evaluation.")
-
-# Add after testing the model:
-if X_test.size > 0:
-    # Calculate confusion matrix
-    from sklearn.metrics import confusion_matrix, classification_report
-    
-    # Get predictions for the test set
-    predictions = model.predict(X_test)
-    predicted_classes = (predictions > 0.5).astype(int)
-    
-    # Generate confusion matrix
-    cm = confusion_matrix(y_test, predicted_classes)
-    print("Confusion Matrix:")
-    print(cm)
-    
-    # Generate detailed classification metrics
-    print("\nClassification Report:")
-    print(classification_report(y_test, predicted_classes))
-    
-    # Calculate True Skill Statistic (TSS) - important for solar flare prediction
-    tn, fp, fn, tp = cm.ravel()
-    tss = tp/(tp+fn) - fp/(fp+tn)
-    print(f"True Skill Statistic (TSS): {tss:.4f}")
