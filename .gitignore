@@ -1,1 +1,16 @@
 /data
+.env
+processed_solar_data.npz
+solar_data
+sharp_cnn_lstm_data
+sharp_cnn_lstm_data_copy
+new_format_copy
+models
+test_data
+WORKING_SHARP
+download_progress.json
+goes_flares.csv
+test_drms_query.py
+test_jsoc_request.py
+test_sharp.py
+jsoc_sharp_test.py
