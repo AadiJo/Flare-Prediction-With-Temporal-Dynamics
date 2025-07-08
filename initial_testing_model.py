@@ -154,5 +154,54 @@ if X_test.size > 0:
     loss, accuracy = model.evaluate(X_test, y_test, verbose=0)
     print(f"Test Set Accuracy: {accuracy * 100:.2f}%")
     print(f"Test Set Loss: {loss:.4f}")
+
+    # Get predictions for the test set
+    predictions = model.predict(X_test)
+    predicted_classes = (predictions > 0.5).astype(int)  # Convert probabilities to binary classes
+
+    # Count occurrences of each class
+    unique, counts = np.unique(predicted_classes, return_counts=True)
+    class_distribution = dict(zip(unique, counts))
+    print(f"Predicted class distribution: {class_distribution}")
 else:
     print("No test set to evaluate. Evaluation skipped.")
+
+# Save the testing set for future use
+if X_test.size > 0:
+    test_set_path = os.path.join(models_dir, 'test_set2.npz')
+    np.savez_compressed(test_set_path, X_test=X_test, y_test=y_test)
+    print(f"Testing set saved to: {test_set_path}")
+else:
+    print("No test set available to save.")
+
+# Evaluate the model on the validation set (if available)
+if X_val.size > 0:
+    print("Evaluating model performance on the validation set...")
+    val_loss, val_accuracy = model.evaluate(X_val, y_val, verbose=0)
+    print(f"Validation Set Accuracy: {val_accuracy * 100:.2f}%")
+    print(f"Validation Set Loss: {val_loss:.4f}")
+else:
+    print("No validation set available for evaluation.")
+
+# Add after testing the model:
+if X_test.size > 0:
+    # Calculate confusion matrix
+    from sklearn.metrics import confusion_matrix, classification_report
+    
+    # Get predictions for the test set
+    predictions = model.predict(X_test)
+    predicted_classes = (predictions > 0.5).astype(int)
+    
+    # Generate confusion matrix
+    cm = confusion_matrix(y_test, predicted_classes)
+    print("Confusion Matrix:")
+    print(cm)
+    
+    # Generate detailed classification metrics
+    print("\nClassification Report:")
+    print(classification_report(y_test, predicted_classes))
+    
+    # Calculate True Skill Statistic (TSS) - important for solar flare prediction
+    tn, fp, fn, tp = cm.ravel()
+    tss = tp/(tp+fn) - fp/(fp+tn)
+    print(f"True Skill Statistic (TSS): {tss:.4f}")

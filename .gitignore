@@ -14,3 +14,5 @@ test_drms_query.py
 test_jsoc_request.py
 test_sharp.py
 jsoc_sharp_test.py
+old_processed.npz
+processed_solar_data.npz
