@@ -7,7 +7,7 @@ import json
 
 load_dotenv()
 # SEGMENTS = ["magnetogram", "continuum", "Dopplergram"]
-ONLY_GET_NON_FLARE_DATA = False
+ONLY_GET_NON_FLARE_DATA = True
 
 PROGRESS_FILE = "download_progress.json"
 
@@ -124,7 +124,7 @@ def main():
     # Dynamically extract all NOAA active regions from the dataset
     valid_noaa_list = m_x_flares['noaa_active_region'].unique()
 
-    NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 100, 100
+    NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 500, 500
     TIME_STEPS, HOURS_BETWEEN_STEPS = 6, 1  # Add hours between steps later if needed
 
     PREDICTION_HORIZON = 12  # 12 hours before flare
@@ -138,7 +138,8 @@ def main():
         for i, row in enumerate(preflare_df.itertuples(), 1):
             if preflare_samples_processed >= NUM_PREFLARE_SAMPLES:
                 break
-                
+            print(f"Processing flare case {i} of {len(preflare_df)} - {preflare_samples_processed + 1} / {NUM_PREFLARE_SAMPLES}")
+
             peak_time = pd.to_datetime(row.peak_time)
             noaa = int(row.noaa_active_region)
             flare_id = peak_time.strftime('%Y%m%d_%H%M')
@@ -179,7 +180,8 @@ def main():
     for i, row in enumerate(non_m_x_flares.itertuples(), 1):
         if quiet_samples_processed >= NUM_QUIET_SAMPLES:
             break
-            
+        print(f"Processing flare case {i} of {len(non_m_x_flares)} - {quiet_samples_processed + 1} / {NUM_QUIET_SAMPLES}")
+
         peak_time = pd.to_datetime(row.peak_time)
         noaa = int(row.noaa_active_region)
         quiet_id = peak_time.strftime('%Y%m%d_%H%M')

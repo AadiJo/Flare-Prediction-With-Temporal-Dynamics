@@ -16,3 +16,4 @@ test_sharp.py
 jsoc_sharp_test.py
 old_processed.npz
 processed_solar_data.npz
+flare_data.py

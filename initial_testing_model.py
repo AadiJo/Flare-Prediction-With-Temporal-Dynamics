@@ -126,7 +126,7 @@ print("Starting model training...")
 
 validation_data = (X_val, y_val) if X_val.size > 0 else None
 
-# ADD early stopping
+# Add early stopping
 early_stopping = EarlyStopping(
     monitor='val_loss',
     patience=3,
@@ -134,7 +134,6 @@ early_stopping = EarlyStopping(
     verbose=1
 )
 
-# MODIFY the model.fit call to include callbacks and class weights
 history = model.fit(
     X_train,
     y_train,
