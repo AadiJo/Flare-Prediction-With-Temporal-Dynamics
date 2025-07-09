@@ -8,7 +8,7 @@ import random
 
 load_dotenv()
 # SEGMENTS = ["magnetogram", "continuum", "Dopplergram"]
-ONLY_GET_NON_FLARE_DATA = False
+GET_FLARE_DATA_FIRST = True
 
 PROGRESS_FILE = "download_progress.json"
 
@@ -22,7 +22,6 @@ def download_sharp_time_series(harpnum, time_points, base_dir="sharp_cnn_lstm_da
     jsoc_email = os.getenv("EMAIL")
     if not jsoc_email:
         raise Exception("EMAIL environment variable not set.")
-    os.makedirs(base_dir, exist_ok=True)
     time_objects = [pd.to_datetime(ts) for ts in time_points]
     start_time, end_time = min(time_objects), max(time_objects)  # No extra padding needed
     try:
@@ -39,6 +38,7 @@ def download_sharp_time_series(harpnum, time_points, base_dir="sharp_cnn_lstm_da
         if len(result) == 0:
             print(f"No data found for the time range")
             return False
+        os.makedirs(base_dir, exist_ok=True)
         files = Fido.fetch(result, path=base_dir)
         import re
         from datetime import datetime
@@ -135,8 +135,8 @@ def main():
     PREDICTION_HORIZON = 12  # 12 hours before flare
     SINGLE_FILE_PER_STEP = False
 
-    # Process pre-flare (positive) samples only if ONLY_GET_NON_FLARE_DATA is False
-    if not ONLY_GET_NON_FLARE_DATA:
+    def process_preflare_data():
+        """Process pre-flare (positive) samples"""
         print(f"Processing {len(m_x_flares)} pre-flare (positive) samples...")
         preflare_df = m_x_flares.sort_values(by='peak_time')
         preflare_samples_processed = 0
@@ -176,52 +176,61 @@ def main():
                     print(f"✓ Completed time series for flare case {flare_id}")
             except Exception as e:
                 print(f"✗ Error processing time series: {e}")
+        return preflare_samples_processed
+
+    def process_quiet_data():
+        """Process quiet (non-pre-flare) samples using non-M/X class flares"""
+        total_quiet_existing = len(processed_flares["quiet"])
+        quiet_samples_needed = max(0, NUM_QUIET_SAMPLES - total_quiet_existing)
+        print(f"\nProcessing quiet samples: {total_quiet_existing} existing + {quiet_samples_needed} needed = {NUM_QUIET_SAMPLES} total")
+        
+        quiet_samples_processed = 0
+        for i, row in enumerate(non_m_x_flares.itertuples(), 1):
+            if quiet_samples_processed >= quiet_samples_needed:
+                break
+            print(f"Processing flare case {i} of {len(non_m_x_flares)} - {quiet_samples_processed + 1} / {quiet_samples_needed}")
+
+            peak_time = pd.to_datetime(row.peak_time)
+            noaa = int(row.noaa_active_region)
+            quiet_id = peak_time.strftime('%Y%m%d_%H%M')
+            
+            # Skip if we've already processed this quiet case
+            quiet_key = f"{noaa}_{quiet_id}"
+            if quiet_key in processed_flares["quiet"]:
+                print(f"Skipping already processed quiet case {quiet_id}")
+                continue
+            
+            # Same 6-hour window ending 12 hours before the flare peak for consistency
+            flare_minus_12h = peak_time - pd.Timedelta(hours=PREDICTION_HORIZON)
+            time_points = [(flare_minus_12h - pd.Timedelta(hours=(TIME_STEPS - t))) for t in range(1, TIME_STEPS + 1)]
+            time_points = [tp.strftime('%Y-%m-%d %H:%M:%S') for tp in time_points]
+            
+            harpnum = get_harpnum_for_noaa(str(noaa))
+            if not harpnum:
+                continue
+            base_dir = f"sharp_cnn_lstm_data/quiet_case_{harpnum}_NOAA_{noaa}_quiet_{quiet_id}"
+            try:
+                success = download_sharp_time_series(harpnum, time_points, base_dir=base_dir, single_file_per_step=SINGLE_FILE_PER_STEP)
+                if success:
+                    quiet_samples_processed += 1
+                    processed_flares["quiet"].append(quiet_key)
+                    # Save progress after each successful download
+                    with open(PROGRESS_FILE, "w") as f:
+                        json.dump(processed_flares, f)
+                    print(f"✓ Completed time series for quiet case {quiet_id}")
+            except Exception as e:
+                print(f"✗ Error processing time series: {e}")
+        return quiet_samples_processed
+
+    # Process data in order based on GET_FLARE_DATA_FIRST
+    if GET_FLARE_DATA_FIRST:
+        preflare_processed = process_preflare_data()
+        quiet_processed = process_quiet_data()
     else:
-        print("ONLY_GET_NON_FLARE_DATA is set to True. Skipping pre-flare data processing.")
+        quiet_processed = process_quiet_data()
+        preflare_processed = process_preflare_data()
 
-    # Process quiet (non-pre-flare) samples using non-M/X class flares
-    total_quiet_existing = len(processed_flares["quiet"])
-    quiet_samples_needed = max(0, NUM_QUIET_SAMPLES - total_quiet_existing)
-    print(f"\nProcessing quiet samples: {total_quiet_existing} existing + {quiet_samples_needed} needed = {NUM_QUIET_SAMPLES} total")
-    
-    quiet_samples_processed = 0
-    for i, row in enumerate(non_m_x_flares.itertuples(), 1):
-        if quiet_samples_processed >= quiet_samples_needed:
-            break
-        print(f"Processing flare case {i} of {len(non_m_x_flares)} - {quiet_samples_processed + 1} / {quiet_samples_needed}")
-
-        peak_time = pd.to_datetime(row.peak_time)
-        noaa = int(row.noaa_active_region)
-        quiet_id = peak_time.strftime('%Y%m%d_%H%M')
-        
-        # Skip if we've already processed this quiet case
-        quiet_key = f"{noaa}_{quiet_id}"
-        if quiet_key in processed_flares["quiet"]:
-            print(f"Skipping already processed quiet case {quiet_id}")
-            continue
-        
-        # Same 6-hour window ending 12 hours before the flare peak for consistency
-        flare_minus_12h = peak_time - pd.Timedelta(hours=PREDICTION_HORIZON)
-        time_points = [(flare_minus_12h - pd.Timedelta(hours=(TIME_STEPS - t))) for t in range(1, TIME_STEPS + 1)]
-        time_points = [tp.strftime('%Y-%m-%d %H:%M:%S') for tp in time_points]
-        
-        harpnum = get_harpnum_for_noaa(str(noaa))
-        if not harpnum:
-            continue
-        base_dir = f"sharp_cnn_lstm_data/quiet_case_{harpnum}_NOAA_{noaa}_quiet_{quiet_id}"
-        try:
-            success = download_sharp_time_series(harpnum, time_points, base_dir=base_dir, single_file_per_step=SINGLE_FILE_PER_STEP)
-            if success:
-                quiet_samples_processed += 1
-                processed_flares["quiet"].append(quiet_key)
-                # Save progress after each successful download
-                with open(PROGRESS_FILE, "w") as f:
-                    json.dump(processed_flares, f)
-                print(f"✓ Completed time series for quiet case {quiet_id}")
-        except Exception as e:
-            print(f"✗ Error processing time series: {e}")
-
-    print(f"\n--- Finished processing {NUM_PREFLARE_SAMPLES if not ONLY_GET_NON_FLARE_DATA else 0} pre-flare and {total_quiet_existing + quiet_samples_processed} quiet samples ---")
+    print(f"\n--- Finished processing {preflare_processed} pre-flare and {len(processed_flares['quiet'])} quiet samples ---")
 
 if __name__ == "__main__":
     main()
