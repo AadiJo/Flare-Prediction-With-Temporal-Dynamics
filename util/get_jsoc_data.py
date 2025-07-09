@@ -1,154 +1,219 @@
 import os
-import time
-import requests
-from tqdm import tqdm
+import pandas as pd
 from dotenv import load_dotenv
+from sunpy.net import Fido, attrs as a
+import astropy.units as u
+import json
 
-# Load environment variables from .env file
 load_dotenv()
+# SEGMENTS = ["magnetogram", "continuum", "Dopplergram"]
+ONLY_GET_NON_FLARE_DATA = False
 
-JSOC_BASE = "http://jsoc.stanford.edu/cgi-bin/ajax/jsocextfetch"
-DOWNLOAD_BASE = "http://jsoc1.stanford.edu"
+PROGRESS_FILE = "download_progress.json"
 
-# Segments to download
-SEGMENTS = ["azimuth", "field", "disambig", "inclination"]
-
-def build_recordset(timestamp):
-    return f"hmi.B_720s[{timestamp}]"
-
-def submit_request(recordset):
-    email = os.getenv('EMAIL')
-    if not email:
-        raise Exception("EMAIL environment variable not set. Please check your .env file.")
+def download_sharp_time_series(harpnum, time_points, base_dir="sharp_cnn_lstm_data", single_file_per_step=False): 
+    # Check if this is a specific case directory that might have been interrupted
+    if os.path.exists(base_dir) and ("flare_case_" in base_dir or "quiet_case_" in base_dir):
+        import shutil
+        print(f"Found existing case directory {base_dir}, cleaning up and starting fresh")
+        shutil.rmtree(base_dir)
     
-    payload = {
-        "op": "exp_request",
-        "ds": recordset,
-        "sizeratio": "1",
-        "process": "n=0|no_op",
-        "requestor": "",
-        "notify": email,
-        "method": "url",
-        "filenamefmt": "hmi.B_720s.{T_REC:A}.{segment}",
-        "format": "json",
-        "protocol": "FITS,compress Rice",
-        "dbhost": "hmidb2",
-    }
+    jsoc_email = os.getenv("EMAIL")
+    if not jsoc_email:
+        raise Exception("EMAIL environment variable not set.")
+    os.makedirs(base_dir, exist_ok=True)
+    time_objects = [pd.to_datetime(ts) for ts in time_points]
+    start_time, end_time = min(time_objects), max(time_objects)  # No extra padding needed
+    try:
+        result = Fido.search(
+            a.Time(start_time.strftime('%Y-%m-%d %H:%M:%S'), end_time.strftime('%Y-%m-%d %H:%M:%S')),
+            a.jsoc.Series("hmi.sharp_cea_720s"),
+            a.jsoc.PrimeKey("HARPNUM", int(harpnum)),
+            a.jsoc.Notify(jsoc_email),
+            a.jsoc.Segment("Bp") &
+            a.jsoc.Segment("Bt") &
+            a.jsoc.Segment("Br") &
+            a.jsoc.Segment("continuum"),
+        )
+        if len(result) == 0:
+            print(f"No data found for the time range")
+            return False
+        files = Fido.fetch(result, path=base_dir)
+        import re
+        from datetime import datetime
+        for i in range(len(time_objects)):
+            os.makedirs(os.path.join(base_dir, f"timestep_{i+1:02d}"), exist_ok=True)
+        for file_path in files:
+            filename = os.path.basename(file_path)
+            m = re.search(r'\.(\d{8}_\d{6})_TAI\.', filename) # Match the timestamp in the filename using CSUIL regex ;)
+            if m:
+                file_time = datetime.strptime(m.group(1), '%Y%m%d_%H%M%S')
+                best_timestep = min(range(len(time_objects)), key=lambda i: abs((file_time - time_objects[i].to_pydatetime()).total_seconds()))
+                new_path = os.path.join(base_dir, f"timestep_{best_timestep+1:02d}", filename)
+            else:
+                new_path = os.path.join(base_dir, "timestep_01", filename)
+            if file_path != new_path:
+                os.rename(file_path, new_path)
+        return len(files) > 0
+    except Exception as e:
+        print(f"Error downloading time series: {e}")
+        return False
 
-    response = requests.post(JSOC_BASE, data=payload)
-    response.raise_for_status()
-    result = response.json()
+def load_noaa_to_harpnum_map_local(filepath="HARP_Mapping.txt"):
+    noaa_to_harp = {}
+    with open(filepath, "r") as f:
+        lines = f.read().strip().splitlines()
+    for line in lines[1:]:
+        if not line.strip():
+            continue
+        harpnum, noaa_ars = line.split(maxsplit=1)
+        for noaa in noaa_ars.split(','):
+            if noaa.strip().isdigit():
+                noaa_to_harp.setdefault(noaa.strip(), []).append(harpnum)
+    return noaa_to_harp
 
-    if result.get("status") != 2:
-        raise Exception(f"Request submission failed: {result}")
+def load_noaa_to_harpnum_map(txt_url="http://jsoc.stanford.edu/doc/data/hmi/harpnum_to_noaa_ars/all_harps_with_noaa_ars.txt"):
+    import requests
+    resp = requests.get(txt_url)
+    resp.raise_for_status()
+    lines = resp.text.strip().splitlines()
+    noaa_to_harp = {}
+    for line in lines[1:]:
+        harpnum, noaa_ars = line.split(maxsplit=1)
+        for noaa in noaa_ars.split(','):
+            if noaa.strip().isdigit():
+                noaa_to_harp.setdefault(noaa.strip(), []).append(harpnum)
+    return noaa_to_harp
 
-    return result["requestid"]
-
-def wait_for_data(requestid):
-    status_payload = {
-        "op": "exp_status",
-        "requestid": requestid,
-        "dbhost": "hmidb2",
-    }
-
-    while True:
-        response = requests.post(JSOC_BASE, data=status_payload)
-        response.raise_for_status()
-        status = response.json()
-
-        if status.get("status") == "0":
-            return status
-        else:
-            print("Waiting for export to complete...")
-            time.sleep(5)
-
-def download_files(status, segments=SEGMENTS, base_dir="data"):
-    data = status["data"]
-    dir_path = status["dir"]
-
-    downloaded = 0
-    for entry in data:
-        filename = entry["filename"]
-        if any(seg in filename for seg in segments):
-            # Extract file header (e.g., "hmi.B_720s.20221215_163600_TAI" from "hmi.B_720s.20221215_163600_TAI.azimuth.fits")
-            file_header = filename.split('.')[0] + '.' + filename.split('.')[1] + '.' + filename.split('.')[2]
-            
-            # Create subdirectory based on file header
-            out_dir = os.path.join(base_dir, file_header)
-            os.makedirs(out_dir, exist_ok=True)
-            
-            url = f"{DOWNLOAD_BASE}{dir_path}/{filename}"
-            output_path = os.path.join(out_dir, filename)
-
-            print(f"Downloading {filename} to {out_dir}...")
-            r = requests.get(url, stream=True)
-            r.raise_for_status()
-
-            total_size = int(r.headers.get('content-length', 0))
-            with open(output_path, 'wb') as f, tqdm(
-                desc=filename,
-                total=total_size,
-                unit='B',
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as bar:
-                for chunk in r.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        bar.update(len(chunk))
-            downloaded += 1
-
-    if downloaded == 0:
-        print("No matching segment files were found.")
-    else:
-        print(f"Downloaded {downloaded} segment(s).")
+def get_harpnum_for_noaa(noaa):
+    try:
+        noaa_to_harp = load_noaa_to_harpnum_map_local()
+    except Exception:
+        noaa_to_harp = load_noaa_to_harpnum_map()
+    harpnums = noaa_to_harp.get(str(noaa), [])
+    if not harpnums:
+        print(f"No HARPNUM found for NOAA AR {noaa}")
+        return None
+    return harpnums[0]
 
 def main():
-    timestamps = [
-        '2021.07.03_16:59:00_TAI',
-        '2021.10.26_15:42:00_TAI',
-        '2021.10.29_02:22:00_TAI',
-        '2022.01.29_22:45:00_TAI',
-        '2022.03.14_08:29:00_TAI',
-        '2022.03.25_05:02:00_TAI',
-        '2022.03.29_09:17:00_TAI',
-        '2022.04.17_02:00:00_TAI',
-        '2022.04.17_02:00:00_TAI',
-        '2022.04.29_18:01:00_TAI',
-        '2022.08.15_21:47:00_TAI',
-        '2022.08.26_10:41:00_TAI',
-        '2022.08.29_18:45:00_TAI',
-        '2022.08.30_18:04:00_TAI',
-        '2022.09.16_09:44:00_TAI',
-        '2022.10.04_12:48:00_TAI',
-        '2022.10.11_08:36:00_TAI',
-        '2022.12.14_07:30:00_TAI'
-    ]
-    
-    print(f"Processing {len(timestamps)} timestamps...")
-    
-    for i, timestamp in enumerate(timestamps, 1):
-        print(f"\n--- Processing {i}/{len(timestamps)}: {timestamp} ---")
-        recordset = build_recordset(timestamp)
-        print(f"Using RecordSet: {recordset}")
+    # Load progress file if it exists
+    if os.path.exists(PROGRESS_FILE):
+        with open(PROGRESS_FILE, "r") as f:
+            processed_flares = json.load(f)
+    else:
+        processed_flares = {
+            "preflare": [],
+            "quiet": []
+        }
 
+    FLARE_CSV = 'goes_flares.csv'
+    if not os.path.exists(FLARE_CSV):
+        print(f"Flare catalog '{FLARE_CSV}' not found.")
+        return
+    df = pd.read_csv(FLARE_CSV).dropna(subset=['noaa_active_region', 'goes_class'])
+    df['noaa_active_region'] = df['noaa_active_region'].astype(int)
+    df = df[pd.to_datetime(df['peak_time']) >= pd.Timestamp('2014-05-01')]
+
+    # Filter for M and X class flares for pre-flare data
+    m_x_flares = df[df['goes_class'].str.startswith(('M', 'X'))]
+
+    # Filter for non-M/X class flares for quiet data
+    non_m_x_flares = df[~df['goes_class'].str.startswith(('M', 'X'))]
+
+    # Dynamically extract all NOAA active regions from the dataset
+    valid_noaa_list = m_x_flares['noaa_active_region'].unique()
+
+    NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 5, 5
+    TIME_STEPS, HOURS_BETWEEN_STEPS = 6, 1  # Add hours between steps later if needed
+
+    PREDICTION_HORIZON = 12  # 12 hours before flare
+    SINGLE_FILE_PER_STEP = False
+
+    # Process pre-flare (positive) samples only if ONLY_GET_NON_FLARE_DATA is False
+    if not ONLY_GET_NON_FLARE_DATA:
+        print(f"Processing {len(m_x_flares)} pre-flare (positive) samples...")
+        preflare_df = m_x_flares.sort_values(by='peak_time')
+        preflare_samples_processed = 0
+        for i, row in enumerate(preflare_df.itertuples(), 1):
+            if preflare_samples_processed >= NUM_PREFLARE_SAMPLES:
+                break
+                
+            peak_time = pd.to_datetime(row.peak_time)
+            noaa = int(row.noaa_active_region)
+            flare_id = peak_time.strftime('%Y%m%d_%H%M')
+            
+            # Skip if we've already processed this flare
+            flare_key = f"{noaa}_{flare_id}"
+            if flare_key in processed_flares["preflare"]:
+                print(f"Skipping already processed flare case {flare_id}")
+                preflare_samples_processed += 1
+                continue
+                
+            # Calculate 6 hourly time points ending 12 hours before flare
+            flare_minus_12h = peak_time - pd.Timedelta(hours=PREDICTION_HORIZON)
+            time_points = [(flare_minus_12h - pd.Timedelta(hours=(TIME_STEPS - t))) for t in range(1, TIME_STEPS + 1)]
+            time_points = [tp.strftime('%Y-%m-%d %H:%M:%S') for tp in time_points]
+            
+            harpnum = get_harpnum_for_noaa(str(noaa))
+            if not harpnum:
+                continue
+            base_dir = f"sharp_cnn_lstm_data/flare_case_{harpnum}_NOAA_{noaa}_flare_{flare_id}"
+            try:
+                success = download_sharp_time_series(harpnum, time_points, base_dir=base_dir, single_file_per_step=SINGLE_FILE_PER_STEP)
+                if success:
+                    preflare_samples_processed += 1
+                    processed_flares["preflare"].append(flare_key)
+                    # Save progress after each successful download
+                    with open(PROGRESS_FILE, "w") as f:
+                        json.dump(processed_flares, f)
+                    print(f"✓ Completed time series for flare case {flare_id}")
+            except Exception as e:
+                print(f"✗ Error processing time series: {e}")
+    else:
+        print("ONLY_GET_NON_FLARE_DATA is set to True. Skipping pre-flare data processing.")
+
+    # Process quiet (non-pre-flare) samples using non-M/X class flares
+    print(f"\nProcessing {NUM_QUIET_SAMPLES} non-pre-flare (quiet) samples...")
+    quiet_samples_processed = 0
+    for i, row in enumerate(non_m_x_flares.itertuples(), 1):
+        if quiet_samples_processed >= NUM_QUIET_SAMPLES:
+            break
+            
+        peak_time = pd.to_datetime(row.peak_time)
+        noaa = int(row.noaa_active_region)
+        quiet_id = peak_time.strftime('%Y%m%d_%H%M')
+        
+        # Skip if we've already processed this quiet case
+        quiet_key = f"{noaa}_{quiet_id}"
+        if quiet_key in processed_flares["quiet"]:
+            print(f"Skipping already processed quiet case {quiet_id}")
+            quiet_samples_processed += 1
+            continue
+        
+        # Same 6-hour window ending 12 hours before the flare peak for consistency
+        flare_minus_12h = peak_time - pd.Timedelta(hours=PREDICTION_HORIZON)
+        time_points = [(flare_minus_12h - pd.Timedelta(hours=(TIME_STEPS - t))) for t in range(1, TIME_STEPS + 1)]
+        time_points = [tp.strftime('%Y-%m-%d %H:%M:%S') for tp in time_points]
+        
+        harpnum = get_harpnum_for_noaa(str(noaa))
+        if not harpnum:
+            continue
+        base_dir = f"sharp_cnn_lstm_data/quiet_case_{harpnum}_NOAA_{noaa}_quiet_{quiet_id}"
         try:
-            print("Submitting request to JSOC...")
-            requestid = submit_request(recordset)
-
-            print(f"Submitted. Request ID: {requestid}")
-            print("Waiting for data to be ready...")
-            status = wait_for_data(requestid)
-
-            print("Downloading selected segment files...")
-            download_files(status)
-            print(f"✓ Completed {timestamp}")
-
+            success = download_sharp_time_series(harpnum, time_points, base_dir=base_dir, single_file_per_step=SINGLE_FILE_PER_STEP)
+            if success:
+                quiet_samples_processed += 1
+                processed_flares["quiet"].append(quiet_key)
+                # Save progress after each successful download
+                with open(PROGRESS_FILE, "w") as f:
+                    json.dump(processed_flares, f)
+                print(f"✓ Completed time series for quiet case {quiet_id}")
         except Exception as e:
-            print(f"✗ Error processing {timestamp}: {e}")
-            continue  # Continue with the next timestamp even if one fails
-    
-    print(f"\n--- Finished processing all {len(timestamps)} timestamps ---")
+            print(f"✗ Error processing time series: {e}")
+
+    print(f"\n--- Finished processing {NUM_PREFLARE_SAMPLES if not ONLY_GET_NON_FLARE_DATA else 0} pre-flare and {quiet_samples_processed} quiet samples ---")
 
 if __name__ == "__main__":
     main()
+

@@ -1,6 +1,5 @@
 /data
 .env
-processed_solar_data.npz
 solar_data
 sharp_cnn_lstm_data
 sharp_cnn_lstm_data_copy

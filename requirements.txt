@@ -16,3 +16,4 @@ lxml
 zeep
 drms
 sunpy
+rich

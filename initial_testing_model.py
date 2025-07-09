@@ -2,9 +2,9 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight  # Add this import
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, TimeDistributed, LSTM, Dense, Dropout
-from tensorflow.keras.callbacks import EarlyStopping  # Add this import
+from tensorflow.keras.models import Sequential, load_model # type: ignore
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, TimeDistributed, LSTM, Dense, Dropout # type: ignore
+from tensorflow.keras.callbacks import EarlyStopping  # Add this import # type: ignore
 from imblearn.over_sampling import RandomOverSampler  # Add this import at the top
 import os
 from datetime import datetime
