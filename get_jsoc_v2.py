@@ -4,10 +4,11 @@ from dotenv import load_dotenv
 from sunpy.net import Fido, attrs as a
 import astropy.units as u
 import json
+import random
 
 load_dotenv()
 # SEGMENTS = ["magnetogram", "continuum", "Dopplergram"]
-ONLY_GET_NON_FLARE_DATA = True
+ONLY_GET_NON_FLARE_DATA = False
 
 PROGRESS_FILE = "download_progress.json"
 
@@ -118,13 +119,17 @@ def main():
     # Filter for M and X class flares for pre-flare data
     m_x_flares = df[df['goes_class'].str.startswith(('M', 'X'))]
 
-    # Filter for non-M/X class flares for quiet data
+    # Filter for non-M/X class flares for quiet data (with end date filter and randomization)
+    QUIET_END_DATE = '2024-05-29'  # End date for random sampling of quiet data
     non_m_x_flares = df[~df['goes_class'].str.startswith(('M', 'X'))]
+    non_m_x_flares = non_m_x_flares[pd.to_datetime(non_m_x_flares['peak_time']) <= pd.Timestamp(QUIET_END_DATE)]
+    # Randomize the order of non-M/X flares
+    non_m_x_flares = non_m_x_flares.sample(frac=1, random_state=42).reset_index(drop=True)
 
     # Dynamically extract all NOAA active regions from the dataset
     valid_noaa_list = m_x_flares['noaa_active_region'].unique()
 
-    NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 500, 500
+    NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 1148, 1148
     TIME_STEPS, HOURS_BETWEEN_STEPS = 6, 1  # Add hours between steps later if needed
 
     PREDICTION_HORIZON = 12  # 12 hours before flare
@@ -175,12 +180,15 @@ def main():
         print("ONLY_GET_NON_FLARE_DATA is set to True. Skipping pre-flare data processing.")
 
     # Process quiet (non-pre-flare) samples using non-M/X class flares
-    print(f"\nProcessing {NUM_QUIET_SAMPLES} non-pre-flare (quiet) samples...")
+    total_quiet_existing = len(processed_flares["quiet"])
+    quiet_samples_needed = max(0, NUM_QUIET_SAMPLES - total_quiet_existing)
+    print(f"\nProcessing quiet samples: {total_quiet_existing} existing + {quiet_samples_needed} needed = {NUM_QUIET_SAMPLES} total")
+    
     quiet_samples_processed = 0
     for i, row in enumerate(non_m_x_flares.itertuples(), 1):
-        if quiet_samples_processed >= NUM_QUIET_SAMPLES:
+        if quiet_samples_processed >= quiet_samples_needed:
             break
-        print(f"Processing flare case {i} of {len(non_m_x_flares)} - {quiet_samples_processed + 1} / {NUM_QUIET_SAMPLES}")
+        print(f"Processing flare case {i} of {len(non_m_x_flares)} - {quiet_samples_processed + 1} / {quiet_samples_needed}")
 
         peak_time = pd.to_datetime(row.peak_time)
         noaa = int(row.noaa_active_region)
@@ -190,7 +198,6 @@ def main():
         quiet_key = f"{noaa}_{quiet_id}"
         if quiet_key in processed_flares["quiet"]:
             print(f"Skipping already processed quiet case {quiet_id}")
-            quiet_samples_processed += 1
             continue
         
         # Same 6-hour window ending 12 hours before the flare peak for consistency
@@ -214,7 +221,7 @@ def main():
         except Exception as e:
             print(f"✗ Error processing time series: {e}")
 
-    print(f"\n--- Finished processing {NUM_PREFLARE_SAMPLES if not ONLY_GET_NON_FLARE_DATA else 0} pre-flare and {quiet_samples_processed} quiet samples ---")
+    print(f"\n--- Finished processing {NUM_PREFLARE_SAMPLES if not ONLY_GET_NON_FLARE_DATA else 0} pre-flare and {total_quiet_existing + quiet_samples_processed} quiet samples ---")
 
 if __name__ == "__main__":
     main()

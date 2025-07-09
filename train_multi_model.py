@@ -335,11 +335,7 @@ def main():
     with open(ensemble_config_path, 'w') as f:
         json.dump(ensemble_config, f, indent=2)
     
-    # Also save a copy in the main models directory for easy access
-    main_config_path = os.path.join(models_dir, "latest_ensemble_config.json")
-    with open(main_config_path, 'w') as f:
-        json.dump(ensemble_config, f, indent=2)
-    
+    # Remove redundant saving in the main models directory
     print(f"\n{'='*60}")
     print("TRAINING SUMMARY")
     print(f"{'='*60}")
@@ -352,7 +348,6 @@ def main():
     
     print(f"\nEnsemble directory: {ensemble_dir}")
     print(f"Ensemble configuration saved to: {ensemble_config_path}")
-    print(f"Latest config link saved to: {main_config_path}")
     print("You can now use 'ensemble_predict.py' to make predictions with all models.")
 
 if __name__ == "__main__":
