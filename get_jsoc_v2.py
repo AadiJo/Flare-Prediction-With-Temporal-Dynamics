@@ -46,8 +46,12 @@ def download_sharp_time_series(harpnum, time_points, base_dir="sharp_cnn_lstm_da
         print(f"[INFO] Downloaded {len(files)} files for HARPNUM={harpnum}.")
         import re
         from datetime import datetime
-        for i in range(len(time_objects)):
-            os.makedirs(os.path.join(base_dir, f"timestep_{i+1:02d}"), exist_ok=True)
+        
+        # Only create subdirectories if we have files
+        if len(files) > 0:
+            for i in range(len(time_objects)):
+                os.makedirs(os.path.join(base_dir, f"timestep_{i+1:02d}"), exist_ok=True)
+                
         for file_path in files:
             filename = os.path.basename(file_path)
             m = re.search(r'\.(\d{8}_\d{6})_TAI\.', filename)
@@ -150,7 +154,7 @@ def main():
             flare_minus_12h = peak_time - pd.Timedelta(hours=PREDICTION_HORIZON)
             time_points = [(flare_minus_12h - pd.Timedelta(hours=(TIME_STEPS - t))) for t in range(1, TIME_STEPS + 1)]
             time_points_str = [tp.strftime('%Y-%m-%d %H:%M:%S') for tp in time_points]
-            base_dir = f"sharp_cnn_lstm_data/{case_type}_case_{harpnum}_NOAA_{noaa}_{'flare' if case_type == 'preflare' else 'quiet'}_{case_id_time}"
+            base_dir = f"sharp_cnn_lstm_data/{'flare' if case_type == 'preflare' else 'quiet'}_case_{harpnum}_NOAA_{noaa}_{case_id_time}"
             jobs_to_run.append({
                 "case_key": case_key,
                 "args": [harpnum, time_points_str, base_dir, SINGLE_FILE_PER_STEP],

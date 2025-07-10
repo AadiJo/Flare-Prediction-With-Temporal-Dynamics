@@ -2,8 +2,56 @@ import os
 import json
 import shutil
 
+def rename_preflare_directories():
+    """Rename directories starting with preflare_case to flare_case"""
+    
+    data_dir = "sharp_cnn_lstm_data"
+    
+    if not os.path.exists(data_dir):
+        print(f"Directory {data_dir} does not exist")
+        return
+        
+    renamed_dirs = []
+    
+    # Look through all directories in sharp_cnn_lstm_data
+    for item in os.listdir(data_dir):
+        item_path = os.path.join(data_dir, item)
+        
+        # Skip if not a directory
+        if not os.path.isdir(item_path):
+            continue
+            
+        # Check if it's a preflare_case directory
+        if item.startswith("preflare_case_"):
+            new_name = "flare_case_" + item[len("preflare_case_"):]
+            new_path = os.path.join(data_dir, new_name)
+            
+            # Rename the directory
+            try:
+                os.rename(item_path, new_path)
+                renamed_dirs.append((item, new_name))
+                print(f"Renamed directory: {item} -> {new_name}")
+            except Exception as e:
+                print(f"Error renaming {item}: {e}")
+    
+    # Summary
+    if renamed_dirs:
+        print(f"\n=== RENAME SUMMARY ===")
+        print(f"Renamed {len(renamed_dirs)} directories from preflare_case to flare_case")
+        for old_name, new_name in renamed_dirs:
+            print(f"  - {old_name} -> {new_name}")
+    else:
+        print("No directories needed renaming.")
+    
+    return len(renamed_dirs)
+
 def cleanup_empty_directories():
     """Clean up empty directories and remove them from download_progress.json"""
+    
+    # First rename any preflare directories to flare
+    rename_count = rename_preflare_directories()
+    if rename_count > 0:
+        print("\nProceeding with empty directory cleanup...\n")
     
     data_dir = "sharp_cnn_lstm_data"
     progress_file = "download_progress.json"

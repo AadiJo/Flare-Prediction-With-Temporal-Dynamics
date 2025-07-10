@@ -29,7 +29,7 @@ class AttentionFusionTrainer:
         
         # Configure which channels/models to use - modify this list as needed
         # Available: ['Bp', 'Br', 'Bt', 'continuum']
-        self.use_channels = use_channels or ['Bp', 'Br', 'Bt']
+        self.use_channels = use_channels or ['Bp', 'Br', 'Bt', 'continuum']
         
         # Load existing ensemble configuration
         config_path = ensemble_config_path or self.find_latest_ensemble_config()
