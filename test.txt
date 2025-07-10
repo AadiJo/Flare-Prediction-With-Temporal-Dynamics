@@ -1,0 +1,84 @@
+Found 672 new preflare cases to process.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_392_NOAA_11163_flare_20110224_0735, cleaning up and starting fresh
+Found existing case directory sharp_cnn_lstm_data/preflare_case_415_NOAA_11171_flare_20110308_0358, cleaning up and starting fresh
+Found existing case directory sharp_cnn_lstm_data/preflare_case_1321_NOAA_11401_flare_20120114_1318, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11171_20110308_0358, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_1321_NOAA_11402_flare_20120123_0359, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11163_20110224_0735, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_1449_NOAA_11429_flare_20120302_1746, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11401_20120114_1318, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_1582_NOAA_11461_flare_20120416_1745, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11402_20120123_0359, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_1638_NOAA_11476_flare_20120505_2301, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11429_20120302_1746, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_1638_NOAA_11476_flare_20120506_0118, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11476_20120506_0118, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_1930_NOAA_11542_flare_20120806_0438, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11476_20120505_2301, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_1946_NOAA_11548_flare_20120817_1319, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11461_20120416_1745, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_1946_NOAA_11548_flare_20120817_1720, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11542_20120806_0438, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_1946_NOAA_11548_flare_20120818_0102, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11548_20120817_1319, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_1946_NOAA_11548_flare_20120818_0323, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11548_20120817_1720, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2137_NOAA_11598_flare_20121020_1814, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2137_NOAA_11598_flare_20121022_1851, cleaning up and starting fresh
+✗ Download failed for case 11548_20120818_0102, but no error was raised.
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11548_20120818_0323, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2137_NOAA_11598_flare_20121023_0317, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11598_20121020_1814, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2193_NOAA_11614_flare_20121111_0233, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11598_20121022_1851, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2362_NOAA_11652_flare_20130105_0931, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11598_20121023_0317, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2635_NOAA_11719_flare_20130405_1748, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11614_20121111_0233, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2739_NOAA_11745_flare_20130510_0057, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11652_20130105_0931, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2739_NOAA_11745_flare_20130510_1256, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11719_20130405_1748, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2748_NOAA_11748_flare_20130512_2032, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11745_20130510_0057, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2748_NOAA_11748_flare_20130512_2244, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11748_20130512_2032, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2748_NOAA_11748_flare_20130513_0217, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11745_20130510_1256, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2748_NOAA_11748_flare_20130513_1203, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11748_20130512_2244, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_2748_NOAA_11748_flare_20130513_1605, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11748_20130513_0217, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_3740_NOAA_11977_flare_20140216_0926, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11748_20130513_1203, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_3730_NOAA_11976_flare_20140220_0756, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+✗ Download failed for case 11748_20130513_1605, but no error was raised.
+Found existing case directory sharp_cnn_lstm_data/preflare_case_4698_NOAA_12192_flare_20141016_1303, cleaning up and starting fresh
+Files Downloaded: 0file [00:00, ?file/s]
+Found existing case directory sharp_cnn_lstm_data/preflare_case_4698_NOAA_12192_flare_20141029_1850, cleaning up and starting fresh
