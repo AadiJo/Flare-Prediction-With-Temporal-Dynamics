@@ -16,3 +16,6 @@ jsoc_sharp_test.py
 old_processed.npz
 processed_solar_data.npz
 flare_data.py
+download_progress_async.json
+async_sharp
+failed_downloads.json

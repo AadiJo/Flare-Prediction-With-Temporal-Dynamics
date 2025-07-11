@@ -326,7 +326,6 @@ def get_solar_cycle_phase(timestamp):
                 return 'falling'
 
     # If outside defined cycles, make a reasonable assumption
-    # Most data in the dataset appears to be from 2011, which is cycle 24 falling phase
     if year < 1996.4:
         return 'falling'  # Assume falling for very old data
     elif year > 2030.0:

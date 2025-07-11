@@ -5,7 +5,7 @@ import shutil
 def rename_preflare_directories():
     """Rename directories starting with preflare_case to flare_case"""
     
-    data_dir = "sharp_cnn_lstm_data"
+    data_dir = "async_sharp"
     
     if not os.path.exists(data_dir):
         print(f"Directory {data_dir} does not exist")

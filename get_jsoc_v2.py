@@ -2,7 +2,6 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from sunpy.net import Fido, attrs as a
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import astropy.units as u
 import json
 import random
@@ -15,18 +14,17 @@ PROGRESS_FILE = "download_progress.json"
 
 def download_sharp_time_series(harpnum, time_points, base_dir="sharp_cnn_lstm_data", single_file_per_step=False): 
     # Check if this is a specific case directory that might have been interrupted
-    if os.path.exists(base_dir) and os.listdir(base_dir):
+    if os.path.exists(base_dir) and ("flare_case_" in base_dir or "quiet_case_" in base_dir):
         import shutil
-        print(f"[INFO] Found existing case directory {base_dir}, cleaning up and starting fresh")
+        print(f"Found existing case directory {base_dir}, cleaning up and starting fresh")
         shutil.rmtree(base_dir)
     
     jsoc_email = os.getenv("EMAIL")
     if not jsoc_email:
         raise Exception("EMAIL environment variable not set.")
     time_objects = [pd.to_datetime(ts) for ts in time_points]
-    start_time, end_time = min(time_objects), max(time_objects)
+    start_time, end_time = min(time_objects), max(time_objects)  # No extra padding needed
     try:
-        print(f"[INFO] Querying JSOC for HARPNUM={harpnum} from {start_time} to {end_time} ...")
         result = Fido.search(
             a.Time(start_time.strftime('%Y-%m-%d %H:%M:%S'), end_time.strftime('%Y-%m-%d %H:%M:%S')),
             a.jsoc.Series("hmi.sharp_cea_720s"),
@@ -38,23 +36,17 @@ def download_sharp_time_series(harpnum, time_points, base_dir="sharp_cnn_lstm_da
             a.jsoc.Segment("continuum"),
         )
         if len(result) == 0:
-            print(f"[WARN] No data found for the time range {start_time} to {end_time} (HARPNUM={harpnum})")
+            print(f"No data found for the time range")
             return False
         os.makedirs(base_dir, exist_ok=True)
-        print(f"[INFO] Downloading files to {base_dir} ... (this may take a while)")
-        files = Fido.fetch(result, path=base_dir, progress=False)  # Disable Fido's progress bar
-        print(f"[INFO] Downloaded {len(files)} files for HARPNUM={harpnum}.")
+        files = Fido.fetch(result, path=base_dir)
         import re
         from datetime import datetime
-        
-        # Only create subdirectories if we have files
-        if len(files) > 0:
-            for i in range(len(time_objects)):
-                os.makedirs(os.path.join(base_dir, f"timestep_{i+1:02d}"), exist_ok=True)
-                
+        for i in range(len(time_objects)):
+            os.makedirs(os.path.join(base_dir, f"timestep_{i+1:02d}"), exist_ok=True)
         for file_path in files:
             filename = os.path.basename(file_path)
-            m = re.search(r'\.(\d{8}_\d{6})_TAI\.', filename)
+            m = re.search(r'\.(\d{8}_\d{6})_TAI\.', filename) # Match the timestamp in the filename using CSUIL regex ;)
             if m:
                 file_time = datetime.strptime(m.group(1), '%Y%m%d_%H%M%S')
                 best_timestep = min(range(len(time_objects)), key=lambda i: abs((file_time - time_objects[i].to_pydatetime()).total_seconds()))
@@ -65,7 +57,7 @@ def download_sharp_time_series(harpnum, time_points, base_dir="sharp_cnn_lstm_da
                 os.rename(file_path, new_path)
         return len(files) > 0
     except Exception as e:
-        print(f"[ERROR] Error downloading time series for HARPNUM={harpnum}: {e}")
+        print(f"Error downloading time series: {e}")
         return False
 
 def load_noaa_to_harpnum_map_local(filepath="HARP_Mapping.txt"):
@@ -106,14 +98,16 @@ def get_harpnum_for_noaa(noaa):
     return harpnums[0]
 
 def main():
-    # Load progress file
+    # Load progress file if it exists
     if os.path.exists(PROGRESS_FILE):
         with open(PROGRESS_FILE, "r") as f:
             processed_flares = json.load(f)
     else:
-        processed_flares = {"preflare": [], "quiet": []}
+        processed_flares = {
+            "preflare": [],
+            "quiet": []
+        }
 
-    # --- Load and prepare your flare data (no changes here) ---
     FLARE_CSV = 'goes_flares.csv'
     if not os.path.exists(FLARE_CSV):
         print(f"Flare catalog '{FLARE_CSV}' not found.")
@@ -121,85 +115,123 @@ def main():
     df = pd.read_csv(FLARE_CSV).dropna(subset=['noaa_active_region', 'goes_class'])
     df['noaa_active_region'] = df['noaa_active_region'].astype(int)
     df = df[pd.to_datetime(df['peak_time']) >= pd.Timestamp('2010-05-01')]
+
+    # Filter for M and X class flares for pre-flare data
     m_x_flares = df[df['goes_class'].str.startswith(('M', 'X'))]
+
+    # Filter for non-M/X class flares for quiet data (with end date filter and randomization)
+    QUIET_END_DATE = '2024-05-29'  # End date for random sampling of quiet data
     non_m_x_flares = df[~df['goes_class'].str.startswith(('M', 'X'))]
+    non_m_x_flares = non_m_x_flares[pd.to_datetime(non_m_x_flares['peak_time']) <= pd.Timestamp(QUIET_END_DATE)]
+    # Randomize the order of non-M/X flares
     non_m_x_flares = non_m_x_flares.sample(frac=1, random_state=42).reset_index(drop=True)
-    
+
+    # Dynamically extract all NOAA active regions from the dataset
+    valid_noaa_list = m_x_flares['noaa_active_region'].unique()
+
     NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 1148, 1148
-    TIME_STEPS, HOURS_BETWEEN_STEPS = 6, 1
-    PREDICTION_HORIZON = 12
+    TIME_STEPS, HOURS_BETWEEN_STEPS = 6, 1  # Add hours between steps later if needed
+
+    PREDICTION_HORIZON = 12  # 12 hours before flare
     SINGLE_FILE_PER_STEP = False
 
-    # Set the number of parallel downloads. 3 is a good starting point.
-    MAX_WORKERS = 3
-
-    def process_cases(case_type, dataframe, num_samples_to_get):
-        """
-        Generic function to process flare or quiet cases in parallel, with improved logging and progress.
-        """
-        print(f"\n--- Processing {case_type} cases ---")
-        jobs_to_run = []
-        for row in dataframe.itertuples():
-            if len(jobs_to_run) + len(processed_flares[case_type]) >= num_samples_to_get:
+    def process_preflare_data():
+        """Process pre-flare (positive) samples"""
+        print(f"Processing {len(m_x_flares)} pre-flare (positive) samples...")
+        preflare_df = m_x_flares.sort_values(by='peak_time')
+        preflare_samples_processed = 0
+        for i, row in enumerate(preflare_df.itertuples(), 1):
+            if preflare_samples_processed >= NUM_PREFLARE_SAMPLES:
                 break
+            print(f"Processing flare case {i} of {len(preflare_df)} - {preflare_samples_processed + 1} / {NUM_PREFLARE_SAMPLES}")
+
             peak_time = pd.to_datetime(row.peak_time)
             noaa = int(row.noaa_active_region)
-            case_id_time = peak_time.strftime('%Y%m%d_%H%M')
-            case_key = f"{noaa}_{case_id_time}"
-            if case_key in processed_flares[case_type]:
-                continue # Skip already processed cases
+            flare_id = peak_time.strftime('%Y%m%d_%H%M')
+            
+            # Skip if we've already processed this flare
+            flare_key = f"{noaa}_{flare_id}"
+            if flare_key in processed_flares["preflare"]:
+                print(f"Skipping already processed flare case {flare_id}")
+                preflare_samples_processed += 1
+                continue
+                
+            # Calculate 6 hourly time points ending 12 hours before flare
+            flare_minus_12h = peak_time - pd.Timedelta(hours=PREDICTION_HORIZON)
+            time_points = [(flare_minus_12h - pd.Timedelta(hours=(TIME_STEPS - t))) for t in range(1, TIME_STEPS + 1)]
+            time_points = [tp.strftime('%Y-%m-%d %H:%M:%S') for tp in time_points]
+            
             harpnum = get_harpnum_for_noaa(str(noaa))
             if not harpnum:
                 continue
+            base_dir = f"sharp_cnn_lstm_data/flare_case_{harpnum}_NOAA_{noaa}_flare_{flare_id}"
+            try:
+                success = download_sharp_time_series(harpnum, time_points, base_dir=base_dir, single_file_per_step=SINGLE_FILE_PER_STEP)
+                if success:
+                    preflare_samples_processed += 1
+                    processed_flares["preflare"].append(flare_key)
+                    # Save progress after each successful download
+                    with open(PROGRESS_FILE, "w") as f:
+                        json.dump(processed_flares, f)
+                    print(f"✓ Completed time series for flare case {flare_id}")
+            except Exception as e:
+                print(f"✗ Error processing time series: {e}")
+        return preflare_samples_processed
+
+    def process_quiet_data():
+        """Process quiet (non-pre-flare) samples using non-M/X class flares"""
+        total_quiet_existing = len(processed_flares["quiet"])
+        quiet_samples_needed = max(0, NUM_QUIET_SAMPLES - total_quiet_existing)
+        print(f"\nProcessing quiet samples: {total_quiet_existing} existing + {quiet_samples_needed} needed = {NUM_QUIET_SAMPLES} total")
+        
+        quiet_samples_processed = 0
+        for i, row in enumerate(non_m_x_flares.itertuples(), 1):
+            if quiet_samples_processed >= quiet_samples_needed:
+                break
+            print(f"Processing flare case {i} of {len(non_m_x_flares)} - {quiet_samples_processed + 1} / {quiet_samples_needed}")
+
+            peak_time = pd.to_datetime(row.peak_time)
+            noaa = int(row.noaa_active_region)
+            quiet_id = peak_time.strftime('%Y%m%d_%H%M')
+            
+            # Skip if we've already processed this quiet case
+            quiet_key = f"{noaa}_{quiet_id}"
+            if quiet_key in processed_flares["quiet"]:
+                print(f"Skipping already processed quiet case {quiet_id}")
+                continue
+            
+            # Same 6-hour window ending 12 hours before the flare peak for consistency
             flare_minus_12h = peak_time - pd.Timedelta(hours=PREDICTION_HORIZON)
             time_points = [(flare_minus_12h - pd.Timedelta(hours=(TIME_STEPS - t))) for t in range(1, TIME_STEPS + 1)]
-            time_points_str = [tp.strftime('%Y-%m-%d %H:%M:%S') for tp in time_points]
-            base_dir = f"sharp_cnn_lstm_data/{'flare' if case_type == 'preflare' else 'quiet'}_case_{harpnum}_NOAA_{noaa}_{case_id_time}"
-            jobs_to_run.append({
-                "case_key": case_key,
-                "args": [harpnum, time_points_str, base_dir, SINGLE_FILE_PER_STEP],
-                "desc": f"NOAA {noaa} | HARPNUM {harpnum} | {case_id_time}"
-            })
-        total_jobs = len(jobs_to_run)
-        print(f"[INFO] Found {total_jobs} new {case_type} cases to process.")
-        if not jobs_to_run:
-            return
-        completed = 0
-        failed = 0
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            future_to_job = {executor.submit(download_sharp_time_series, *job["args"]): job for job in jobs_to_run}
-            for idx, future in enumerate(as_completed(future_to_job), 1):
-                job = future_to_job[future]
-                case_key = job["case_key"]
-                desc = job["desc"]
-                print(f"[PROGRESS] ({idx}/{total_jobs}) Starting download for case: {desc}")
-                try:
-                    success = future.result()
-                    if success:
-                        print(f"[SUCCESS] ({idx}/{total_jobs}) Completed download for case {case_key}")
-                        processed_flares[case_type].append(case_key)
-                        completed += 1
-                        with open(PROGRESS_FILE, "w") as f:
-                            json.dump(processed_flares, f)
-                    else:
-                        print(f"[FAIL] ({idx}/{total_jobs}) Download failed for case {case_key}, but no error was raised.")
-                        failed += 1
-                except Exception as e:
-                    print(f"[ERROR] ({idx}/{total_jobs}) Error processing case {case_key}: {e}")
-                    failed += 1
-                print(f"[SUMMARY] {completed} completed, {failed} failed, {total_jobs-idx} remaining.")
-        print(f"[BATCH SUMMARY] {completed} completed, {failed} failed, {total_jobs} attempted for {case_type} cases.")
+            time_points = [tp.strftime('%Y-%m-%d %H:%M:%S') for tp in time_points]
+            
+            harpnum = get_harpnum_for_noaa(str(noaa))
+            if not harpnum:
+                continue
+            base_dir = f"sharp_cnn_lstm_data/quiet_case_{harpnum}_NOAA_{noaa}_quiet_{quiet_id}"
+            try:
+                success = download_sharp_time_series(harpnum, time_points, base_dir=base_dir, single_file_per_step=SINGLE_FILE_PER_STEP)
+                if success:
+                    quiet_samples_processed += 1
+                    processed_flares["quiet"].append(quiet_key)
+                    # Save progress after each successful download
+                    with open(PROGRESS_FILE, "w") as f:
+                        json.dump(processed_flares, f)
+                    print(f"✓ Completed time series for quiet case {quiet_id}")
+            except Exception as e:
+                print(f"✗ Error processing time series: {e}")
+        return quiet_samples_processed
 
-    # Process flare and quiet data based on the flag
+    # Process data in order based on GET_FLARE_DATA_FIRST
     if GET_FLARE_DATA_FIRST:
-        process_cases("preflare", m_x_flares, NUM_PREFLARE_SAMPLES)
-        process_cases("quiet", non_m_x_flares, NUM_QUIET_SAMPLES)
+        preflare_processed = process_preflare_data()
+        quiet_processed = process_quiet_data()
     else:
-        process_cases("quiet", non_m_x_flares, NUM_QUIET_SAMPLES)
-        process_cases("preflare", m_x_flares, NUM_PREFLARE_SAMPLES)
+        quiet_processed = process_quiet_data()
+        preflare_processed = process_preflare_data()
 
-    print(f"\n--- Finished all processing ---")
-
+    print(f"\n--- Finished processing {preflare_processed} pre-flare and {len(processed_flares['quiet'])} quiet samples ---")
 
 if __name__ == "__main__":
     main()
+

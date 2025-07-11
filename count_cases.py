@@ -1,6 +1,6 @@
 import os
 
-base_dir = "sharp_cnn_lstm_data"
+base_dir = "async_sharp"
 flare_count = 0
 quiet_count = 0
 
