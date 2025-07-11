@@ -13,8 +13,12 @@ import warnings
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 # Constants for data processing
-JSOC_DIR = 'sharp_cnn_lstm_data'
+JSOC_DIR = 'async_sharp'
 OUTPUT_FILE = 'processed_solar_data.npz'
+
+# Configuration for combining external .npz files
+COMBINE_EXTERNAL_NPZ = True  # Set to True to combine with external .npz file
+EXTERNAL_NPZ_FILE = 'processed_solar_data_end.npz' 
 
 IMAGE_HEIGHT = 64
 IMAGE_WIDTH = 64
@@ -440,6 +444,138 @@ def _init_worker():
     warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 
+def load_external_npz(external_npz_path):
+    """
+    Load data from an external .npz file (e.g., from your friend's processed data).
+    
+    Args:
+        external_npz_path (str): Path to the external .npz file
+        
+    Returns:
+        tuple: (X_external, y_external, metadata_external) or (None, None, None) if failed
+    """
+    try:
+        if not os.path.exists(external_npz_path):
+            print(f"External .npz file not found: {external_npz_path}")
+            return None, None, None
+            
+        print(f"Loading external .npz file: {external_npz_path}")
+        data = np.load(external_npz_path, allow_pickle=True)
+        
+        X_external = data['X']
+        y_external = data['y']
+        metadata_external = data['metadata']
+        
+        print(f"Loaded external data: X={X_external.shape}, y={y_external.shape}, metadata={len(metadata_external)}")
+        
+        # Convert metadata to list if it's an array
+        if isinstance(metadata_external, np.ndarray):
+            metadata_external = metadata_external.tolist()
+        
+        return X_external, y_external, metadata_external
+        
+    except Exception as e:
+        print(f"Error loading external .npz file: {e}")
+        return None, None, None
+
+
+def remove_duplicates_by_case(X_current, y_current, metadata_current, X_external, y_external, metadata_external):
+    """
+    Remove duplicate entries between current and external data based on case names.
+    Keeps the current data and removes duplicates from external data.
+    
+    Args:
+        X_current, y_current, metadata_current: Current processed data
+        X_external, y_external, metadata_external: External data to merge
+        
+    Returns:
+        tuple: (X_combined, y_combined, metadata_combined) with duplicates removed
+    """
+    print("Removing duplicates between current and external data...")
+    
+    # Get case names from current data
+    current_cases = set()
+    for meta in metadata_current:
+        case_name = meta['case']
+        current_cases.add(case_name)
+    
+    print(f"Current data has {len(current_cases)} unique cases")
+    
+    # Filter external data to remove duplicates
+    external_indices_to_keep = []
+    duplicate_count = 0
+    
+    for i, meta in enumerate(metadata_external):
+        case_name = meta['case']
+        if case_name not in current_cases:
+            external_indices_to_keep.append(i)
+        else:
+            duplicate_count += 1
+    
+    print(f"Found {duplicate_count} duplicate cases in external data")
+    print(f"Keeping {len(external_indices_to_keep)} unique cases from external data")
+    
+    if not external_indices_to_keep:
+        print("No unique external data to add")
+        return X_current, y_current, metadata_current
+    
+    # Filter external data
+    X_external_filtered = X_external[external_indices_to_keep]
+    y_external_filtered = y_external[external_indices_to_keep]
+    metadata_external_filtered = [metadata_external[i] for i in external_indices_to_keep]
+    
+    # Combine the data
+    X_combined = np.concatenate([X_current, X_external_filtered], axis=0)
+    y_combined = np.concatenate([y_current, y_external_filtered], axis=0)
+    metadata_combined = metadata_current + metadata_external_filtered
+    
+    print(f"Combined data shapes: X={X_combined.shape}, y={y_combined.shape}, metadata={len(metadata_combined)}")
+    
+    return X_combined, y_combined, metadata_combined
+
+
+def combine_with_external_data(X_current, y_current, metadata_current, external_npz_path):
+    """
+    Combine current processed data with external .npz file data, removing duplicates.
+    
+    Args:
+        X_current, y_current, metadata_current: Current processed data
+        external_npz_path (str): Path to external .npz file
+        
+    Returns:
+        tuple: (X_combined, y_combined, metadata_combined) or original data if failed
+    """
+    # Load external data
+    X_external, y_external, metadata_external = load_external_npz(external_npz_path)
+    
+    if X_external is None:
+        print("Failed to load external data, using only current data")
+        return X_current, y_current, metadata_current
+    
+    # Verify data compatibility
+    if X_external.shape[1:] != X_current.shape[1:]:
+        print(f"Warning: External data shape {X_external.shape} doesn't match current data shape {X_current.shape}")
+        print("Sequence dimensions must match (timesteps, height, width, channels)")
+        return X_current, y_current, metadata_current
+    
+    # Remove duplicates and combine
+    X_combined, y_combined, metadata_combined = remove_duplicates_by_case(
+        X_current, y_current, metadata_current,
+        X_external, y_external, metadata_external
+    )
+    
+    # Print final statistics
+    unique_values, counts = np.unique(y_combined, return_counts=True)
+    print(f"Combined class distribution: {dict(zip(unique_values, counts))}")
+    
+    # Print solar cycle phase distribution
+    solar_phases = [item['solar_cycle_phase'] for item in metadata_combined]
+    phase_counts = Counter(solar_phases)
+    print(f"Combined solar cycle phase distribution: {dict(phase_counts)}")
+    
+    return X_combined, y_combined, metadata_combined
+
+
 if __name__ == "__main__":
     import time
     start_time = time.time()
@@ -456,8 +592,18 @@ if __name__ == "__main__":
         X_final, y_final, metadata = create_final_dataset(processed_data)
 
         if X_final is not None and X_final.size > 0:
+            print(f"Initial dataset shapes: X={X_final.shape}, y={y_final.shape}")
+            print(f"Initial metadata entries: {len(metadata)}")
+            
+            # Combine with external .npz file if enabled
+            if COMBINE_EXTERNAL_NPZ:
+                print(f"\n🔄 Combining with external .npz file...")
+                X_final, y_final, metadata = combine_with_external_data(
+                    X_final, y_final, metadata, EXTERNAL_NPZ_FILE
+                )
+            
             print(f"Final dataset shapes: X={X_final.shape}, y={y_final.shape}")
-            print(f"Metadata entries: {len(metadata)}")
+            print(f"Final metadata entries: {len(metadata)}")
             print(f"Memory usage: {X_final.nbytes / 1024**3:.2f} GB")
             
             # Save with compression for better storage efficiency

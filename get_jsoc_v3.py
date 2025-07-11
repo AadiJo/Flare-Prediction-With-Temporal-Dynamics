@@ -109,10 +109,18 @@ async def download_sharp_time_series_async(client, harpnum, time_points, base_di
                         continue
                     else:
                         print(f"✗ Export failed for {flare_key} after {max_export_retries} attempts: rate limited")
-                        return
+                        async with lock:
+                            failed_downloads.append(flare_key)
+                            with open(FAILED_DOWNLOADS_FILE, "w") as f:
+                                json.dump(failed_downloads, f, indent=4)
+                        return False
                 else:
                     print(f"No data found or export failed for {flare_key} (status: {export_request.status})")
-                    return # Exit the function
+                    async with lock:
+                        failed_downloads.append(flare_key)
+                        with open(FAILED_DOWNLOADS_FILE, "w") as f:
+                            json.dump(failed_downloads, f, indent=4)
+                    return False # Return failure indicator
                     
             except Exception as e:
                 if "pending export requests" in str(e) or "status=7" in str(e):
@@ -124,7 +132,11 @@ async def download_sharp_time_series_async(client, harpnum, time_points, base_di
                         continue
                     else:
                         print(f"✗ Export failed for {flare_key} after {max_export_retries} attempts: {e}")
-                        return
+                        async with lock:
+                            failed_downloads.append(flare_key)
+                            with open(FAILED_DOWNLOADS_FILE, "w") as f:
+                                json.dump(failed_downloads, f, indent=4)
+                        return False
                 else:
                     # Other error, re-raise
                     raise e
@@ -186,11 +198,11 @@ async def download_sharp_time_series_async(client, harpnum, time_points, base_di
         if not successful_downloads:
             print(f"✗ All downloads failed for {flare_key}. Skipping.")
             # Add to failed downloads
-            failed_downloads.append(flare_key)
             async with lock:
+                failed_downloads.append(flare_key)
                 with open(FAILED_DOWNLOADS_FILE, "w") as f:
                     json.dump(failed_downloads, f, indent=4)
-            return
+            return False
 
         # Your file organization logic...
         files_in_dir = []
@@ -200,11 +212,11 @@ async def download_sharp_time_series_async(client, harpnum, time_points, base_di
         if not files_in_dir:
             print(f"✗ No FITS files found in {base_dir} after download attempt. Skipping.")
             # Add to failed downloads
-            failed_downloads.append(flare_key)
             async with lock:
+                failed_downloads.append(flare_key)
                 with open(FAILED_DOWNLOADS_FILE, "w") as f:
                     json.dump(failed_downloads, f, indent=4)
-            return
+            return False
 
         for file_path in files_in_dir:
             file_path = os.path.normpath(file_path)  # Normalize path
@@ -222,21 +234,23 @@ async def download_sharp_time_series_async(client, harpnum, time_points, base_di
             if os.path.exists(file_path) and file_path != new_path:
                  os.rename(file_path, new_path)
 
-        # Update progress safely
-        processed_flares[progress_dict_key].append(flare_key)
+        # Update progress safely - only mark as completed if we actually succeeded
         async with lock:
+            processed_flares[progress_dict_key].append(flare_key)
             with open(PROGRESS_FILE, "w") as f:
                 json.dump(processed_flares, f, indent=4)
 
         print(f"✓ Completed time series for {flare_key}({base_dir})")
+        return True  # Return success indicator
 
     except Exception as e:
         print(f"✗ Error processing time series for {flare_key}: {e}")
         # Add to failed downloads
-        failed_downloads.append(flare_key)
         async with lock:
+            failed_downloads.append(flare_key)
             with open(FAILED_DOWNLOADS_FILE, "w") as f:
                 json.dump(failed_downloads, f, indent=4)
+        return False  # Return failure indicator
 
 
 # Keep all your other functions (load_noaa_to_harpnum_map_local, etc.) unchanged
@@ -313,7 +327,7 @@ async def main():
     non_m_x_flares = non_m_x_flares[pd.to_datetime(non_m_x_flares['peak_time']) <= pd.Timestamp(QUIET_END_DATE)]
     non_m_x_flares = non_m_x_flares.sample(frac=1, random_state=42).reset_index(drop=True)
     
-    NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 400, 400
+    NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 0, 1196
     TIME_STEPS, HOURS_BETWEEN_STEPS = 6, 1
     PREDICTION_HORIZON = 12
     BATCH_SIZE = 5  # Process samples in batches to avoid overwhelming the system
@@ -324,14 +338,15 @@ async def main():
         print(f"Starting processing for {data_label} samples. Total to process: {num_samples}")
         
         lock = asyncio.Lock()
-        total_processed = 0
+        successful_count = 0
         
-        # Continue processing until we reach the desired number of samples
-        while len(processed_flares[progress_key]) + total_processed < num_samples:
+        # Continue processing until we reach the desired number of successful samples
+        while len(processed_flares[progress_key]) < num_samples:
             tasks = []
+            task_keys = []  # Track which key corresponds to each task
             
             for row in data_df.itertuples():
-                if len(processed_flares[progress_key]) + total_processed + len(tasks) >= num_samples:
+                if len(processed_flares[progress_key]) + len(tasks) >= num_samples:
                     break
 
                 peak_time = pd.to_datetime(row.peak_time)
@@ -360,13 +375,12 @@ async def main():
                         print(f"Found existing data for {item_key}, skipping...")
                         # Add to processed list if not already there
                         if item_key not in processed_flares[progress_key]:
-                            processed_flares[progress_key].append(item_key)
-                            async with asyncio.Lock():
+                            async with lock:
+                                processed_flares[progress_key].append(item_key)
                                 with open(PROGRESS_FILE, "w") as f:
                                     json.dump(processed_flares, f, indent=4)
                         continue
 
-                
                 flare_minus_12h = peak_time - pd.Timedelta(hours=PREDICTION_HORIZON)
                 time_points = [(flare_minus_12h - pd.Timedelta(hours=(TIME_STEPS - t))) for t in range(1, TIME_STEPS + 1)]
                 time_points_str = [tp.strftime('%Y-%m-%d %H:%M:%S') for tp in time_points]
@@ -376,6 +390,7 @@ async def main():
                 base_dir = os.path.normpath(base_dir)  # Normalize the path
                 
                 tasks.append(download_sharp_time_series_async(client, harpnum, time_points_str, base_dir, item_key, progress_key, processed_flares, failed_downloads, lock))
+                task_keys.append(item_key)
                 
                 # Stop collecting tasks when we reach batch size
                 if len(tasks) >= BATCH_SIZE:
@@ -386,19 +401,31 @@ async def main():
                 break
             
             print(f"Processing batch of {len(tasks)} {data_label} cases...")
-            await asyncio.gather(*tasks)
-            total_processed += len(tasks)
-            print(f"Batch completed. Total processed: {len(processed_flares[progress_key]) + total_processed}/{num_samples}.")
+            results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            print(f"Batch progress: {len(processed_flares[progress_key]) + total_processed}/{num_samples} completed.")
+            # Count successful downloads in this batch
+            batch_successful = 0
+            for i, result in enumerate(results):
+                if result is True:  # Success
+                    batch_successful += 1
+                elif isinstance(result, Exception):
+                    print(f"Exception in task for {task_keys[i]}: {result}")
+                # False means it failed but was handled gracefully
+            
+            successful_count += batch_successful
+            current_total = len(processed_flares[progress_key])
+            
+            print(f"Batch completed. Successful in batch: {batch_successful}/{len(tasks)}.")
+            print(f"Overall progress: {current_total}/{num_samples} successfully completed.")
             
             # Add a small delay between batches to be nice to the server
-            if len(processed_flares[progress_key]) + total_processed < num_samples:
-                remaining_batches = (num_samples - (len(processed_flares[progress_key]) + total_processed)) // BATCH_SIZE
-                print(f"Waiting 7 seconds before next batch. Estimated remaining batches: {remaining_batches}")
+            if current_total < num_samples:
+                remaining_needed = num_samples - current_total
+                print(f"Still need {remaining_needed} more successful downloads.")
+                print(f"Waiting 7 seconds before next batch...")
                 await asyncio.sleep(7)
         
-        return total_processed
+        return successful_count
 
     # Simplified execution flow
     if GET_FLARE_DATA_FIRST:
@@ -409,7 +436,16 @@ async def main():
         await process_data(m_x_flares, NUM_PREFLARE_SAMPLES, "preflare", "flare")
 
     print(f"\n--- Finished processing ---")
+    print(f"Preflare samples completed: {len(processed_flares['preflare'])}/{NUM_PREFLARE_SAMPLES}")
+    print(f"Quiet samples completed: {len(processed_flares['quiet'])}/{NUM_QUIET_SAMPLES}")
     print(f"Total failed downloads: {len(failed_downloads)}")
+    
+    if failed_downloads:
+        print("Failed download keys:")
+        for failed_key in failed_downloads[-10:]:  # Show last 10 failed downloads
+            print(f"  - {failed_key}")
+        if len(failed_downloads) > 10:
+            print(f"  ... and {len(failed_downloads) - 10} more failures")
 
 if __name__ == "__main__":
     asyncio.run(main())
