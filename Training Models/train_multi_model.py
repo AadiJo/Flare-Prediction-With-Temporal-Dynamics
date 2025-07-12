@@ -94,8 +94,8 @@ def train_channel_model(X_channel, y, channel_name, channel_idx):
     history = model.fit(
         X_train,
         y_train,
-        epochs=10,
-        batch_size=8,
+        epochs=20,
+        batch_size=16,
         validation_data=(X_val, y_val),
         class_weight=class_weight_dict,
         callbacks=[early_stopping],
@@ -170,7 +170,7 @@ def train_channel_model_with_splits(X_train, X_val, X_test, y_train, y_val, y_te
     history = model.fit(
         X_train,
         y_train,
-        epochs=10,
+        epochs=20,
         batch_size=8,
         validation_data=(X_val, y_val),
         class_weight=class_weight_dict,
@@ -260,7 +260,7 @@ def main():
         channel_names = [f"Channel_{i}" for i in range(X.shape[-1])]
     
     # Create ensemble directory
-    models_dir = os.path.join(os.path.dirname(__file__), "models")
+    models_dir = os.path.join(os.path.dirname(__file__), "../models")
     os.makedirs(models_dir, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

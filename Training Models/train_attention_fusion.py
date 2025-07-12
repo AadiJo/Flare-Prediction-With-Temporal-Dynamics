@@ -41,7 +41,7 @@ class AttentionFusionTrainer:
     
     def find_latest_ensemble_config(self):
         """Find the latest ensemble configuration file"""
-        models_dir = "models"
+        models_dir = "../models"
         if not os.path.exists(models_dir):
             return None
             

@@ -20,7 +20,7 @@ class CNNVisualizationTool:
         else: console.print("[red]No ensemble configuration found. Please train models first.[/red]")
 
     def find_latest_ensemble_config(self):
-        models_dir = "models"
+        models_dir = "../models"
         latest_config_path = os.path.join(models_dir, "latest_ensemble_config.json")
         if os.path.exists(latest_config_path): return latest_config_path
         ensemble_dirs = sorted([d for d in os.listdir(models_dir) if os.path.isdir(os.path.join(models_dir, d)) and d.startswith('ensemble_')], reverse=True)
