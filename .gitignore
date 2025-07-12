@@ -1,4 +1,4 @@
-/data
+data
 .env
 solar_data
 sharp_cnn_lstm_data
@@ -22,3 +22,4 @@ failed_downloads.json
 failed_downloads copy.json
 append_download_prog.py
 processed_solar_data_end.npz
+plots
