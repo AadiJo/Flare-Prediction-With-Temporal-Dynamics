@@ -24,3 +24,6 @@ append_download_prog.py
 processed_solar_data_end.npz
 processed_HED_data.npz
 plots
+tuning_results*/
+Training Models/tune_hyperparameters.py
+Training Models/__pycache__/

@@ -13,6 +13,9 @@ import shutil
 # Define channel names corresponding to the 4 magnetic field components
 CHANNEL_NAMES = ['Bp', 'Br', 'Bt', 'continuum']
 
+np.random.seed(42)
+tf.random.set_seed(42)
+
 def create_cnnlstm_model(input_shape, model_name):
     """Create a CNN-LSTM model for a specific channel."""
     model = Sequential(name=f"Solar_Flare_Predictor_{model_name}")
@@ -83,8 +86,8 @@ def train_channel_model(X_channel, y, channel_name, channel_idx):
     
     # Set up early stopping
     early_stopping = EarlyStopping(
-        monitor='val_loss',
-        patience=5,
+        monitor='val_tss',
+        patience=8,
         restore_best_weights=True,
         verbose=1
     )
@@ -157,24 +160,58 @@ def train_channel_model_with_splits(X_train, X_val, X_test, y_train, y_val, y_te
     print(f"\nModel Architecture Summary for {channel_name}:")
     model.summary()
     
-    # Set up early stopping
-    early_stopping = EarlyStopping(
-        monitor='val_loss',
-        patience=5,
-        restore_best_weights=True,
-        verbose=1
-    )
-    
+    # Custom callback to monitor val_tss and stop training when it does not improve
+    class ValTSSMonitor(tf.keras.callbacks.Callback):
+        def __init__(self, validation_data, patience=5):
+            super().__init__()
+            self.validation_data = validation_data
+            self.patience = patience
+            self.best_tss = -np.inf
+            self.wait = 0
+            self.best_weights = None
+            self.best_epoch = 0
+
+        def on_epoch_end(self, epoch, logs=None):
+            val_pred = self.model.predict(self.validation_data[0], verbose=0)
+            val_pred_classes = (val_pred > 0.5).astype(int)
+            from sklearn.metrics import confusion_matrix
+            cm = confusion_matrix(self.validation_data[1], val_pred_classes)
+            tss = None
+            if cm.shape == (2, 2):
+                tn, fp, fn, tp = cm.ravel()
+                tss = tp/(tp+fn) - fp/(fp+tn)
+            else:
+                tss = 0.0
+            logs = logs if logs is not None else {}
+            logs['val_tss'] = tss
+            print(f"Epoch {epoch+1}: val_accuracy={logs.get('val_accuracy', 'N/A'):.4f}, val_tss={tss}")
+
+            # Early stopping logic
+            if tss > self.best_tss:
+                self.best_tss = tss
+                self.wait = 0
+                self.best_weights = self.model.get_weights()
+                self.best_epoch = epoch+1
+            else:
+                self.wait += 1
+                if self.wait >= self.patience:
+                    print(f"Epoch {epoch+1}: early stopping (no improvement in val_tss for {self.patience} epochs)")
+                    print(f"Restoring model weights from the end of the best epoch: {self.best_epoch}.")
+                    self.model.stop_training = True
+                    self.model.set_weights(self.best_weights)
+
+    val_tss_monitor = ValTSSMonitor((X_val, y_val), patience=5)
+
     # Train the model
     print(f"\nStarting training for {channel_name}...")
     history = model.fit(
         X_train,
         y_train,
-        epochs=20,
+        epochs=30,
         batch_size=8,
         validation_data=(X_val, y_val),
         class_weight=class_weight_dict,
-        callbacks=[early_stopping],
+        callbacks=[val_tss_monitor],
         verbose=1
     )
     

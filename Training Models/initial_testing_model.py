@@ -137,7 +137,7 @@ early_stopping = EarlyStopping(
 history = model.fit(
     X_train,
     y_train,
-    epochs=20,  # Increase epochs since we have early stopping
+    epochs=20,
     batch_size=8,
     validation_data=validation_data,
     class_weight=class_weight_dict,  # Add class weights
