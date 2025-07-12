@@ -69,10 +69,10 @@ def process_reorganized_data(data_dir="sharp_cnn_lstm_data", max_workers=None):
     case_folders = [f for f in base_path.iterdir() if f.is_dir() and (f.name.startswith('flare_case_') or f.name.startswith('quiet_case_'))]
     print(f"Found {len(case_folders)} case folders")
     
-    if max_workers is None: max_workers = min(mp.cpu_count() - 1, 4)
+    if max_workers is None: max_workers = min(mp.cpu_count() - 1, 3)
     print(f"Using {max_workers} parallel workers")
     
-    batch_size = max(1, min(20, len(case_folders) // max_workers))
+    batch_size = max(1, min(15, len(case_folders) // max_workers))
     processed_data = []
     
     for i in range(0, len(case_folders), batch_size):
