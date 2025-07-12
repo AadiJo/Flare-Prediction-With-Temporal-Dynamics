@@ -22,4 +22,5 @@ failed_downloads.json
 failed_downloads copy.json
 append_download_prog.py
 processed_solar_data_end.npz
+processed_HED_data.npz
 plots
