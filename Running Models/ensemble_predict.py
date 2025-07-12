@@ -26,7 +26,7 @@ class EnsemblePredictor:
             print("No ensemble configuration found. Please train models first.")
     
     def find_latest_ensemble_config(self):
-        models_dir = "models"
+        models_dir = "../models"
         latest_config_path = os.path.join(models_dir, "latest_ensemble_config.json")
         if os.path.exists(latest_config_path):
             return latest_config_path

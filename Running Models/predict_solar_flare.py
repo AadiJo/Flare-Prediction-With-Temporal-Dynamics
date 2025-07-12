@@ -15,7 +15,7 @@ from rich import box
 # Initialize Rich console
 console = Console()
 
-def load_latest_model(models_dir="models"):
+def load_latest_model(models_dir="../models"):
     """Load the most recent model from the models directory."""
     if not os.path.exists(models_dir):
         console.print(f"[red]Models directory '{models_dir}' not found.[/red]")
@@ -38,7 +38,7 @@ def load_latest_model(models_dir="models"):
     console.print(f"[green]Loading model from:[/green] {model_path}")
     return load_model(model_path), os.path.splitext(latest_model_file)[0]
 
-def load_specific_model(model_name, models_dir="models"):
+def load_specific_model(model_name, models_dir="../models"):
     """Load a specific model by name from the models directory."""
     # Check if model_name already has an extension
     if not (model_name.endswith(".keras") or model_name.endswith(".h5")):
@@ -69,7 +69,7 @@ def predict_solar_flare(model, input_data):
     predictions = model.predict(input_data)
     return predictions
 
-def load_test_data(model_name, models_dir="models"):
+def load_test_data(model_name, models_dir="../models"):
     """Load the test data saved during model training."""
     # Strip file extension if present
     model_name = os.path.splitext(model_name)[0]
@@ -88,7 +88,7 @@ def load_test_data(model_name, models_dir="models"):
     console.print(f"[green]Loaded test data with shape:[/green] X={X_test.shape}, y={y_test.shape}")
     return X_test, y_test
 
-def evaluate_model_on_test_data(model, model_name, models_dir="models"):
+def evaluate_model_on_test_data(model, model_name, models_dir="../models"):
     """Evaluate model on the saved test data."""
     X_test, y_test = load_test_data(model_name, models_dir)
     

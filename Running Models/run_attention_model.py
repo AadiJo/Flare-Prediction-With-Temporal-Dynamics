@@ -57,7 +57,7 @@ class SimpleAttentionPredictor:
         
     def find_attention_config(self):
         """Find attention fusion configuration"""
-        models_dir = "models"
+        models_dir = "../models"
         if not os.path.exists(models_dir):
             return None
             
@@ -77,7 +77,7 @@ class SimpleAttentionPredictor:
         
     def find_ensemble_config(self):
         """Find ensemble configuration"""
-        models_dir = "models"
+        models_dir = "../models"
         if not os.path.exists(models_dir):
             return None
             

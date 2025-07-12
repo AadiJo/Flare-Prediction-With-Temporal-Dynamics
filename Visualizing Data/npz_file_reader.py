@@ -7,7 +7,7 @@ from matplotlib.gridspec import GridSpec
 def find_latest_test_set():
     """Find the most recent test_set.npz file in the models directory structure."""
     # Look for test_set.npz files in the models directory and its subdirectories
-    models_dir = os.path.join(os.path.dirname(__file__), "models")
+    models_dir = os.path.join(os.path.dirname(__file__), "../models")
     if not os.path.exists(models_dir):
         print(f"Models directory '{models_dir}' not found.")
         return None
