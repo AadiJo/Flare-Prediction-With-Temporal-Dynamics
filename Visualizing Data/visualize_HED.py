@@ -1,14 +1,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
+import os
 
 def debug_sample_visualization(
     file_original="processed_solar_data.npz",
     file_boosted="processed_HED_data.npz",
     flare_only=None,  # None = mix, True = flare only, False = quiet only
-    num_samples=4
+    num_samples=4,
+    save_dir="./plots"  # Directory to save plots
 ):
     print("Loading datasets...")
+    
+    # Create save directory if it doesn't exist
+    os.makedirs(save_dir, exist_ok=True)
+    
     data_orig = np.load(file_original, allow_pickle=True)
     data_boost = np.load(file_boosted, allow_pickle=True)
 
@@ -67,7 +73,15 @@ def debug_sample_visualization(
             plt.colorbar()
 
             plt.tight_layout()
-            plt.show()
+            
+            # Save the plot instead of showing it
+            filename = f"sample_{idx}_{label_str}_timestep_{timestep}_channel_{channel_names[ch]}.png"
+            filepath = os.path.join(save_dir, filename)
+            plt.savefig(filepath, dpi=300, bbox_inches='tight')
+            print(f"   Saved: {filename}")
+            plt.close()  # Close the figure to free memory
+
+    print(f"\nAll visualizations saved to: {save_dir}")
 
 
 if __name__ == "__main__":
