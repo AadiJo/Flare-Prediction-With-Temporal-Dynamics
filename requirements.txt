@@ -103,9 +103,6 @@ pyOpenSSL==23.2.0
 pyparsing==3.1.1
 pyrsistent==0.20.0
 pyserial==3.5
-python-apt==2.7.7+ubuntu4
-python-dateutil==2.9.0.post0
-python-dotenv==1.1.1
 pytz==2024.1
 PyYAML==6.0.1
 requests==2.32.4
