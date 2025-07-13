@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.models import load_model
+from tensorflow.keras.models import load_model # type: ignore
 import json
 import os
 import sys
@@ -26,7 +26,9 @@ class EnsemblePredictor:
             print("No ensemble configuration found. Please train models first.")
     
     def find_latest_ensemble_config(self):
-        models_dir = "../models"
+        # Get the absolute path to the models directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        models_dir = os.path.join(os.path.dirname(script_dir), "models")
         latest_config_path = os.path.join(models_dir, "latest_ensemble_config.json")
         if os.path.exists(latest_config_path):
             return latest_config_path
@@ -232,7 +234,12 @@ class EnsemblePredictor:
 def predict_on_random_samples():
     try:
         with console.status("[bold green]Loading sample data..."):
-            with np.load('processed_solar_data.npz') as data:
+            # Look for processed data in the project root
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(script_dir)
+            data_file = os.path.join(project_root, 'processed_solar_data.npz')
+            
+            with np.load(data_file) as data:
                 X = data['X']
                 y_true = data['y']
         
@@ -304,7 +311,9 @@ def predict_on_random_samples():
         console.print(f"[red]Error loading or predicting data: {e}[/red]")
 
 def load_test_data():
-    models_dir = "models"
+    # Get the absolute path to the models directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    models_dir = os.path.join(os.path.dirname(script_dir), "models")
     
     # Check for latest_ensemble_config.json
     latest_config_path = os.path.join(models_dir, "latest_ensemble_config.json")
@@ -345,7 +354,10 @@ def load_test_data():
     # Last resort: create from processed data
     console.print("[yellow]No test set files found. Creating from processed data...[/yellow]")
     try:
-        with np.load('processed_solar_data.npz') as data:
+        # Look for processed data in the project root
+        project_root = os.path.dirname(script_dir)
+        data_file = os.path.join(project_root, 'processed_solar_data.npz')
+        with np.load(data_file) as data:
             X = data['X']
             y = data['y']
         
@@ -364,7 +376,9 @@ def main():
         console.print(Panel.fit("[bold orange1]Ensemble Solar Flare Prediction[/bold orange1]", border_style="orange1"))
 
         # Detect available ensemble configuration files
-        models_dir = "models"
+        # Get the absolute path to the models directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        models_dir = os.path.join(os.path.dirname(script_dir), "models")
         config_files = []
 
         latest_config_path = os.path.join(models_dir, "latest_ensemble_config.json")
