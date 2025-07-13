@@ -19,3 +19,4 @@ sunpy==7.0.0
 tensorflow[and-cuda]==2.19.0
 tqdm==4.65.0
 opencv-python==4.8.1.78
+streamlit
