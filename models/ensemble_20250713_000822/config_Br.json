@@ -1,0 +1,13 @@
+{
+  "channel_name": "Br",
+  "channel_index": 1,
+  "model_name": "solar_flare_model_Br",
+  "input_shape": [
+    null,
+    6,
+    64,
+    64,
+    1
+  ],
+  "total_params": 2537867
+}

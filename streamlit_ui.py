@@ -274,10 +274,11 @@ def load_test_data_ui():
     try:
         X_test, y_test = load_test_data()
         if X_test is not None and y_test is not None:
-            # Randomly sample 15 samples
+            # Sample up to 15 samples (or all if fewer than 15)
             total_samples = len(X_test)
-            if total_samples >= 15:
-                random_indices = np.random.choice(total_samples, size=15, replace=False)
+            sample_size = min(15, total_samples)
+            if total_samples >= sample_size:
+                random_indices = np.random.choice(total_samples, size=sample_size, replace=False)
                 return X_test[random_indices], y_test[random_indices]
             else:
                 return X_test, y_test
@@ -288,10 +289,11 @@ def load_test_data_ui():
                 with np.load(fallback_path) as data:
                     X_test = data['X_test']
                     y_test = data.get('y_test', None)
-                    # Randomly sample 15 samples
+                    # Sample up to 15 samples (or all if fewer than 15)
                     total_samples = len(X_test)
-                    if total_samples >= 15:
-                        random_indices = np.random.choice(total_samples, size=15, replace=False)
+                    sample_size = min(15, total_samples)
+                    if total_samples >= sample_size:
+                        random_indices = np.random.choice(total_samples, size=sample_size, replace=False)
                         X_test = X_test[random_indices]
                         if y_test is not None:
                             y_test = y_test[random_indices]
@@ -354,14 +356,15 @@ def generate_all_saliency_maps(X_test, _predictor):
     return saliency_maps
 
 # Generate saliency maps for all samples
-st.info("Generating saliency maps for all 15 samples...")
+actual_sample_count = len(X_test)
+st.info(f"Generating saliency maps for all {actual_sample_count} samples...")
 with st.spinner("This may take a moment..."):
     saliency_maps = generate_all_saliency_maps(X_test, predictor)
 st.success("Saliency maps generated!")
 
 # Initialize session state for card flip status and predictions
 if 'flipped' not in st.session_state:
-    st.session_state.flipped = {f"card_{i}": False for i in range(15)}
+    st.session_state.flipped = {f"card_{i}": False for i in range(actual_sample_count)}
 if 'predictions' not in st.session_state:
     st.session_state.predictions = {}
 
@@ -370,7 +373,7 @@ st.markdown('<div class="card-container">', unsafe_allow_html=True)
 
 # Create cards in rows of 5 for better layout control
 cards_per_row = 5
-total_cards = 15
+total_cards = actual_sample_count
 
 # Add responsive behavior with JavaScript
 st.markdown("""
