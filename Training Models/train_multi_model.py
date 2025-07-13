@@ -9,12 +9,26 @@ import os
 from datetime import datetime
 import json
 import shutil
+import random
 
 # Define channel names corresponding to the 4 magnetic field components
 CHANNEL_NAMES = ['Bp', 'Br', 'Bt', 'continuum']
 
-np.random.seed(42)
-tf.random.set_seed(42)
+# Add a global flag to toggle reproducibility
+enable_reproducibility = True
+
+if enable_reproducibility:
+    # Set all random seeds
+    random.seed(42)
+    np.random.seed(42)
+    tf.random.set_seed(42)
+    
+    # For TensorFlow 2.19.0, use tf.config.experimental instead of environment variable
+    tf.config.experimental.enable_op_determinism()
+    
+    print("Reproducibility enabled with fixed seeds.")
+else:
+    print("Reproducibility is disabled. Randomness may vary.")
 
 def create_cnnlstm_model(input_shape, model_name):
     """Create a CNN-LSTM model for a specific channel."""
@@ -282,7 +296,7 @@ def main():
     
     # Load pre-processed data
     print("Loading pre-processed data...")
-    with np.load('processed_solar_data.npz') as data:
+    with np.load('processed_HED_data.npz') as data:
         X = data['X']  # Shape: (samples, timesteps, height, width, channels)
         y = data['y']  # Shape: (samples,)
     
@@ -301,6 +315,7 @@ def main():
     os.makedirs(models_dir, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
     ensemble_dir = os.path.join(models_dir, f"ensemble_{timestamp}")
     os.makedirs(ensemble_dir, exist_ok=True)
     
@@ -324,37 +339,44 @@ def main():
     # Store model information for ensemble
     trained_models = []
     model_info = {}
-    
+    tss_scores = {}
     # Train a separate model for each channel
     for channel_idx in range(X.shape[-1]):
         channel_name = channel_names[channel_idx]
-        
         # Extract single channel data from the split datasets
         X_train_channel = X_train[:, :, :, :, channel_idx:channel_idx+1]
         X_val_channel = X_val[:, :, :, :, channel_idx:channel_idx+1]
         X_test_channel = X_test[:, :, :, :, channel_idx:channel_idx+1]
-        
         print(f"\nPreparing data for {channel_name}...")
         print(f"Channel data shapes - Train: {X_train_channel.shape}, Val: {X_val_channel.shape}, Test: {X_test_channel.shape}")
-        
         # Train the model using the pre-split data
         model, history, test_accuracy = train_channel_model_with_splits(
             X_train_channel, X_val_channel, X_test_channel, 
             y_train, y_val, y_test, channel_name, channel_idx
         )
-        
+        # Calculate TSS for test set
+        tss_score = None
+        if model is not None and test_accuracy is not None:
+            predictions = model.predict(X_test_channel)
+            predicted_classes = (predictions > 0.5).astype(int)
+            from sklearn.metrics import confusion_matrix
+            cm = confusion_matrix(y_test, predicted_classes)
+            if cm.shape == (2, 2):
+                tn, fp, fn, tp = cm.ravel()
+                tss_score = tp/(tp+fn) - fp/(fp+tn)
+            else:
+                tss_score = None
         if model is not None:
             # Save model artifacts in ensemble directory
             model_path = save_model_artifacts(model, history, None, channel_name, channel_idx, ensemble_dir)
-            
             # Store model information
             model_info[channel_name] = {
                 'model_path': model_path,
                 'channel_index': channel_idx,
                 'test_accuracy': test_accuracy
             }
-            
             trained_models.append((channel_name, model_path))
+            tss_scores[channel_name] = tss_score
     
     # Save ensemble configuration in the ensemble directory
     ensemble_config = {
@@ -379,10 +401,12 @@ def main():
     print(f"Successfully trained {len(trained_models)} models:")
     for channel_name, model_path in trained_models:
         accuracy = model_info[channel_name].get('test_accuracy', 'N/A')
+        tss = tss_scores.get(channel_name, 'N/A')
         if accuracy != 'N/A':
             accuracy = f"{accuracy*100:.2f}%"
-        print(f"  - {channel_name}: {accuracy}")
-    
+        if tss != 'N/A' and tss is not None:
+            tss = f"{tss:.4f}"
+        print(f"  - {channel_name}: Accuracy = {accuracy}, TSS = {tss}")
     print(f"\nEnsemble directory: {ensemble_dir}")
     print(f"Ensemble configuration saved to: {ensemble_config_path}")
     print("You can now use 'ensemble_predict.py' to make predictions with all models.")

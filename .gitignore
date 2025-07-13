@@ -27,3 +27,6 @@ plots
 tuning_results*/
 Training Models/tune_hyperparameters.py
 Training Models/__pycache__/
+models.txt
+test_gauss.py
+ai_venv

@@ -11,8 +11,6 @@ from rich.table import Table
 from rich.panel import Panel
 from rich import box
 
-
-
 console = Console()
 
 class SimpleAttentionPredictor:
