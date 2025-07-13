@@ -5,7 +5,7 @@ drms==0.9.0
 imbalanced_learn==0.10.1
 imblearn==0.0
 matplotlib==3.7.2
-numpy==2.3.1
+numpy==1.26.4
 pandas==2.0.3
 psutil==5.9.0
 python-dotenv==1.1.1
@@ -14,7 +14,8 @@ rich==14.0.0
 scikit_learn==1.2.2
 scikit_optimize==0.10.2
 seaborn==0.13.2
-skimage==0.0
+scikit-image
 sunpy==7.0.0
-tensorflow==2.19.0
+tensorflow[and-cuda]==2.19.0
 tqdm==4.65.0
+opencv-python==4.8.1.78

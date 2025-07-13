@@ -20,7 +20,7 @@ class CNNVisualizationTool:
         else: console.print("[red]No ensemble configuration found. Please train models first.[/red]")
 
     def find_latest_ensemble_config(self):
-        models_dir = "../models"
+        models_dir = "models"
         latest_config_path = os.path.join(models_dir, "latest_ensemble_config.json")
         if os.path.exists(latest_config_path): return latest_config_path
         ensemble_dirs = sorted([d for d in os.listdir(models_dir) if os.path.isdir(os.path.join(models_dir, d)) and d.startswith('ensemble_')], reverse=True)
@@ -35,7 +35,8 @@ class CNNVisualizationTool:
         self.ensemble_dir = config.get('ensemble_dir', os.path.dirname(config_path))
         console.print(f"[cyan]Loading {len(config['models'])} models...[/cyan]")
         for channel_name in config['models']:
-            model_path = os.path.join(self.ensemble_dir, f"solar_flare_model_{channel_name}.keras")
+            model_filename = f"solar_flare_model_{channel_name}.keras"
+            model_path = os.path.normpath(os.path.join(self.ensemble_dir, model_filename))
             try:
                 if not os.path.exists(model_path): raise FileNotFoundError(f"Model file not found: {model_path}")
                 self.models[channel_name] = load_model(model_path)
@@ -176,7 +177,7 @@ class CNNVisualizationTool:
 def load_sample_data():
     try:
         console.print("[cyan]Loading sample data...[/cyan]")
-        with np.load('processed_solar_data.npz') as data: X, y = data['X'], data['y']
+        with np.load('processed_HED_data.npz') as data: X, y = data['X'], data['y']
         console.print(f"[green]Loaded data with shape:[/green] X={X.shape}, y={y.shape}")
         return X, y
     except Exception as e:

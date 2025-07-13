@@ -9,7 +9,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 # Constants
-JSOC_DIR = "C:\\Users\\suraj\\OneDrive\\Desktop\\CodingProjects\\HSRA\\async_sharp"
+JSOC_DIR = "../HSRA/async_sharp"
 OUTPUT_FILE = 'processed_solar_data.npz'
 COMBINE_EXTERNAL_NPZ = True
 EXTERNAL_NPZ_FILE = 'processed_solar_data_end.npz' 
