@@ -1,4 +1,6 @@
 data
+__pycache__
+.vscode
 .env
 solar_data
 sharp_cnn_lstm_data
