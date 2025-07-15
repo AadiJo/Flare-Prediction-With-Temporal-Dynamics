@@ -1,4 +1,9 @@
 data
+<<<<<<< HEAD
+=======
+__pycache__
+.vscode
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
 .env
 solar_data
 sharp_cnn_lstm_data
@@ -23,4 +28,14 @@ failed_downloads copy.json
 append_download_prog.py
 processed_solar_data_end.npz
 processed_HED_data.npz
+<<<<<<< HEAD
 plots
+=======
+plots
+tuning_results*/
+Training Models/tune_hyperparameters.py
+Training Models/__pycache__/
+models.txt
+test_gauss.py
+ai_venv
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11

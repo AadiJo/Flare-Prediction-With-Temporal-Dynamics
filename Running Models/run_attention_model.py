@@ -11,8 +11,11 @@ from rich.table import Table
 from rich.panel import Panel
 from rich import box
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
 console = Console()
 
 class SimpleAttentionPredictor:
@@ -57,7 +60,11 @@ class SimpleAttentionPredictor:
         
     def find_attention_config(self):
         """Find attention fusion configuration"""
+<<<<<<< HEAD
         models_dir = "models"
+=======
+        models_dir = "../models"
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         if not os.path.exists(models_dir):
             return None
             
@@ -77,7 +84,11 @@ class SimpleAttentionPredictor:
         
     def find_ensemble_config(self):
         """Find ensemble configuration"""
+<<<<<<< HEAD
         models_dir = "models"
+=======
+        models_dir = "../models"
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         if not os.path.exists(models_dir):
             return None
             

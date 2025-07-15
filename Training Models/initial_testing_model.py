@@ -11,7 +11,11 @@ from datetime import datetime
 import json
 import shutil  # Add this import for file copying
 
+<<<<<<< HEAD
 def load_latest_model(models_dir="models"):
+=======
+def load_latest_model(models_dir="../models"):
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
     """Load the most recent model from the models directory."""
     if not os.path.exists(models_dir):
         print(f"Models directory '{models_dir}' not found.")
@@ -137,7 +141,11 @@ early_stopping = EarlyStopping(
 history = model.fit(
     X_train,
     y_train,
+<<<<<<< HEAD
     epochs=10,  # Increase epochs since we have early stopping
+=======
+    epochs=20,
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
     batch_size=8,
     validation_data=validation_data,
     class_weight=class_weight_dict,  # Add class weights
@@ -150,7 +158,11 @@ print("-" * 40)
 
 # Save the trained model and training history
 # Create models directory if it doesn't exist
+<<<<<<< HEAD
 models_dir = os.path.join(os.path.dirname(__file__), "models")
+=======
+models_dir = os.path.join(os.path.dirname(__file__), "../models")
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
 os.makedirs(models_dir, exist_ok=True)
 
 # Generate a timestamp for the model name

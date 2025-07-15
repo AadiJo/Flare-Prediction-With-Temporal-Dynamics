@@ -9,7 +9,11 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 # Constants
+<<<<<<< HEAD
 JSOC_DIR = "C:\\Users\\suraj\\OneDrive\\Desktop\\CodingProjects\\HSRA\\async_sharp"
+=======
+JSOC_DIR = "../HSRA/async_sharp"
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
 OUTPUT_FILE = 'processed_solar_data.npz'
 COMBINE_EXTERNAL_NPZ = True
 EXTERNAL_NPZ_FILE = 'processed_solar_data_end.npz' 
@@ -69,10 +73,17 @@ def process_reorganized_data(data_dir="sharp_cnn_lstm_data", max_workers=None):
     case_folders = [f for f in base_path.iterdir() if f.is_dir() and (f.name.startswith('flare_case_') or f.name.startswith('quiet_case_'))]
     print(f"Found {len(case_folders)} case folders")
     
+<<<<<<< HEAD
     if max_workers is None: max_workers = min(mp.cpu_count() - 1, 4)
     print(f"Using {max_workers} parallel workers")
     
     batch_size = max(1, min(20, len(case_folders) // max_workers))
+=======
+    if max_workers is None: max_workers = min(mp.cpu_count() - 1, 3)
+    print(f"Using {max_workers} parallel workers")
+    
+    batch_size = max(1, min(15, len(case_folders) // max_workers))
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
     processed_data = []
     
     for i in range(0, len(case_folders), batch_size):

@@ -9,10 +9,33 @@ import os
 from datetime import datetime
 import json
 import shutil
+<<<<<<< HEAD
+=======
+import random
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
 
 # Define channel names corresponding to the 4 magnetic field components
 CHANNEL_NAMES = ['Bp', 'Br', 'Bt', 'continuum']
 
+<<<<<<< HEAD
+=======
+# Add a global flag to toggle reproducibility
+enable_reproducibility = True
+
+if enable_reproducibility:
+    # Set all random seeds
+    random.seed(42)
+    np.random.seed(42)
+    tf.random.set_seed(42)
+    
+    # For TensorFlow 2.19.0, use tf.config.experimental instead of environment variable
+    tf.config.experimental.enable_op_determinism()
+    
+    print("Reproducibility enabled with fixed seeds.")
+else:
+    print("Reproducibility is disabled. Randomness may vary.")
+
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
 def create_cnnlstm_model(input_shape, model_name):
     """Create a CNN-LSTM model for a specific channel."""
     model = Sequential(name=f"Solar_Flare_Predictor_{model_name}")
@@ -83,8 +106,13 @@ def train_channel_model(X_channel, y, channel_name, channel_idx):
     
     # Set up early stopping
     early_stopping = EarlyStopping(
+<<<<<<< HEAD
         monitor='val_loss',
         patience=5,
+=======
+        monitor='val_tss',
+        patience=8,
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         restore_best_weights=True,
         verbose=1
     )
@@ -94,8 +122,13 @@ def train_channel_model(X_channel, y, channel_name, channel_idx):
     history = model.fit(
         X_train,
         y_train,
+<<<<<<< HEAD
         epochs=10,
         batch_size=8,
+=======
+        epochs=20,
+        batch_size=16,
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         validation_data=(X_val, y_val),
         class_weight=class_weight_dict,
         callbacks=[early_stopping],
@@ -157,6 +190,7 @@ def train_channel_model_with_splits(X_train, X_val, X_test, y_train, y_val, y_te
     print(f"\nModel Architecture Summary for {channel_name}:")
     model.summary()
     
+<<<<<<< HEAD
     # Set up early stopping
     early_stopping = EarlyStopping(
         monitor='val_loss',
@@ -165,16 +199,68 @@ def train_channel_model_with_splits(X_train, X_val, X_test, y_train, y_val, y_te
         verbose=1
     )
     
+=======
+    # Custom callback to monitor val_tss and stop training when it does not improve
+    class ValTSSMonitor(tf.keras.callbacks.Callback):
+        def __init__(self, validation_data, patience=5):
+            super().__init__()
+            self.validation_data = validation_data
+            self.patience = patience
+            self.best_tss = -np.inf
+            self.wait = 0
+            self.best_weights = None
+            self.best_epoch = 0
+
+        def on_epoch_end(self, epoch, logs=None):
+            val_pred = self.model.predict(self.validation_data[0], verbose=0)
+            val_pred_classes = (val_pred > 0.5).astype(int)
+            from sklearn.metrics import confusion_matrix
+            cm = confusion_matrix(self.validation_data[1], val_pred_classes)
+            tss = None
+            if cm.shape == (2, 2):
+                tn, fp, fn, tp = cm.ravel()
+                tss = tp/(tp+fn) - fp/(fp+tn)
+            else:
+                tss = 0.0
+            logs = logs if logs is not None else {}
+            logs['val_tss'] = tss
+            print(f"Epoch {epoch+1}: val_accuracy={logs.get('val_accuracy', 'N/A'):.4f}, val_tss={tss}")
+
+            # Early stopping logic
+            if tss > self.best_tss:
+                self.best_tss = tss
+                self.wait = 0
+                self.best_weights = self.model.get_weights()
+                self.best_epoch = epoch+1
+            else:
+                self.wait += 1
+                if self.wait >= self.patience:
+                    print(f"Epoch {epoch+1}: early stopping (no improvement in val_tss for {self.patience} epochs)")
+                    print(f"Restoring model weights from the end of the best epoch: {self.best_epoch}.")
+                    self.model.stop_training = True
+                    self.model.set_weights(self.best_weights)
+
+    val_tss_monitor = ValTSSMonitor((X_val, y_val), patience=5)
+
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
     # Train the model
     print(f"\nStarting training for {channel_name}...")
     history = model.fit(
         X_train,
         y_train,
+<<<<<<< HEAD
         epochs=10,
         batch_size=8,
         validation_data=(X_val, y_val),
         class_weight=class_weight_dict,
         callbacks=[early_stopping],
+=======
+        epochs=30,
+        batch_size=8,
+        validation_data=(X_val, y_val),
+        class_weight=class_weight_dict,
+        callbacks=[val_tss_monitor],
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         verbose=1
     )
     
@@ -245,7 +331,11 @@ def main():
     
     # Load pre-processed data
     print("Loading pre-processed data...")
+<<<<<<< HEAD
     with np.load('processed_solar_data.npz') as data:
+=======
+    with np.load('processed_HED_data.npz') as data:
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         X = data['X']  # Shape: (samples, timesteps, height, width, channels)
         y = data['y']  # Shape: (samples,)
     
@@ -260,10 +350,18 @@ def main():
         channel_names = [f"Channel_{i}" for i in range(X.shape[-1])]
     
     # Create ensemble directory
+<<<<<<< HEAD
     models_dir = os.path.join(os.path.dirname(__file__), "models")
     os.makedirs(models_dir, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+=======
+    models_dir = os.path.join(os.path.dirname(__file__), "../models")
+    os.makedirs(models_dir, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
     ensemble_dir = os.path.join(models_dir, f"ensemble_{timestamp}")
     os.makedirs(ensemble_dir, exist_ok=True)
     
@@ -287,37 +385,72 @@ def main():
     # Store model information for ensemble
     trained_models = []
     model_info = {}
+<<<<<<< HEAD
     
     # Train a separate model for each channel
     for channel_idx in range(X.shape[-1]):
         channel_name = channel_names[channel_idx]
         
+=======
+    tss_scores = {}
+    # Train a separate model for each channel
+    for channel_idx in range(X.shape[-1]):
+        channel_name = channel_names[channel_idx]
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         # Extract single channel data from the split datasets
         X_train_channel = X_train[:, :, :, :, channel_idx:channel_idx+1]
         X_val_channel = X_val[:, :, :, :, channel_idx:channel_idx+1]
         X_test_channel = X_test[:, :, :, :, channel_idx:channel_idx+1]
+<<<<<<< HEAD
         
         print(f"\nPreparing data for {channel_name}...")
         print(f"Channel data shapes - Train: {X_train_channel.shape}, Val: {X_val_channel.shape}, Test: {X_test_channel.shape}")
         
+=======
+        print(f"\nPreparing data for {channel_name}...")
+        print(f"Channel data shapes - Train: {X_train_channel.shape}, Val: {X_val_channel.shape}, Test: {X_test_channel.shape}")
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         # Train the model using the pre-split data
         model, history, test_accuracy = train_channel_model_with_splits(
             X_train_channel, X_val_channel, X_test_channel, 
             y_train, y_val, y_test, channel_name, channel_idx
         )
+<<<<<<< HEAD
         
         if model is not None:
             # Save model artifacts in ensemble directory
             model_path = save_model_artifacts(model, history, None, channel_name, channel_idx, ensemble_dir)
             
+=======
+        # Calculate TSS for test set
+        tss_score = None
+        if model is not None and test_accuracy is not None:
+            predictions = model.predict(X_test_channel)
+            predicted_classes = (predictions > 0.5).astype(int)
+            from sklearn.metrics import confusion_matrix
+            cm = confusion_matrix(y_test, predicted_classes)
+            if cm.shape == (2, 2):
+                tn, fp, fn, tp = cm.ravel()
+                tss_score = tp/(tp+fn) - fp/(fp+tn)
+            else:
+                tss_score = None
+        if model is not None:
+            # Save model artifacts in ensemble directory
+            model_path = save_model_artifacts(model, history, None, channel_name, channel_idx, ensemble_dir)
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
             # Store model information
             model_info[channel_name] = {
                 'model_path': model_path,
                 'channel_index': channel_idx,
                 'test_accuracy': test_accuracy
             }
+<<<<<<< HEAD
             
             trained_models.append((channel_name, model_path))
+=======
+            trained_models.append((channel_name, model_path))
+            tss_scores[channel_name] = tss_score
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
     
     # Save ensemble configuration in the ensemble directory
     ensemble_config = {
@@ -342,13 +475,26 @@ def main():
     print(f"Successfully trained {len(trained_models)} models:")
     for channel_name, model_path in trained_models:
         accuracy = model_info[channel_name].get('test_accuracy', 'N/A')
+<<<<<<< HEAD
         if accuracy != 'N/A':
             accuracy = f"{accuracy*100:.2f}%"
         print(f"  - {channel_name}: {accuracy}")
     
+=======
+        tss = tss_scores.get(channel_name, 'N/A')
+        if accuracy != 'N/A':
+            accuracy = f"{accuracy*100:.2f}%"
+        if tss != 'N/A' and tss is not None:
+            tss = f"{tss:.4f}"
+        print(f"  - {channel_name}: Accuracy = {accuracy}, TSS = {tss}")
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
     print(f"\nEnsemble directory: {ensemble_dir}")
     print(f"Ensemble configuration saved to: {ensemble_config_path}")
     print("You can now use 'ensemble_predict.py' to make predictions with all models.")
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     main()
+=======
+    main()
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11

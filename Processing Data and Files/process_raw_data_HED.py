@@ -1,39 +1,44 @@
 import numpy as np
 
-def compute_HED_mask(Bp, Bt, Br, threshold=2e4):
-    """Compute HED region mask using Gauss-scale magnetic fields."""
-    B_total = np.sqrt(Bp**2 + Bt**2 + Br**2)
-    B_potential = np.abs(Br)  # Br-only approximation
-    rho_free = (B_total**2 - B_potential**2) / (8 * np.pi)  # in erg/cm^3
-    return rho_free >= threshold
+def compute_HED_mask(Bp, Bt, Br, threshold=1e4):
+    """Compute binary HED mask using lowered threshold."""
+    B_total2 = Bp**2 + Bt**2 + Br**2
+    B_potential2 = Br**2
+    rho_free = (B_total2 - B_potential2) / (8 * np.pi)
+    return rho_free >= threshold  # boolean mask
 
-def compute_HED_masked_normalized(seq_norm, seq_orig):
-    """Apply HED mask (based on Gauss-scale) to normalized data."""
+def apply_HED_mask(seq_norm, seq_orig, threshold=1e4):
+    """Apply binary HED mask uniformly to all 4 channels."""
     Bp, Bt, Br = seq_orig[..., 0], seq_orig[..., 1], seq_orig[..., 2]
-    mask_seq = np.array([compute_HED_mask(Bp[t], Bt[t], Br[t]) for t in range(seq_orig.shape[0])])
+    masked_seq = np.zeros_like(seq_norm, dtype=np.float32)
+    
+    for t in range(seq_norm.shape[0]):
+        mask = compute_HED_mask(Bp[t], Bt[t], Br[t], threshold=threshold)
+        masked_seq[t] = seq_norm[t] * mask[..., np.newaxis]  # broadcast across 4 channels
 
-    # Apply mask to normalized channels (all 4)
-    return seq_norm * mask_seq[..., np.newaxis]
+    return masked_seq
 
-def convert_to_HED_masked(input_file='processed_solar_data.npz', output_file='processed_HED_data.npz'):
+def convert_to_HED_masked(input_file='processed_solar_data.npz',
+                          output_file='processed_HED_data.npz',
+                          threshold=1e4):
     print(f"Loading {input_file}...")
     data = np.load(input_file, allow_pickle=True)
-    X_norm = data['X']               # normalized input (0–1)
-    X_orig = data['X_Original']      # Gauss-scale magnetic fields
+    X_norm = data['X']
+    X_orig = data['X_original']
     y = data['y']
     metadata = data['metadata']
-    
-    assert X_norm.shape == X_orig.shape, "X and X_Original shapes do not match!"
 
-    print("Computing HED-masked sequences...")
-    X_HED = np.array([
-        compute_HED_masked_normalized(X_norm[i], X_orig[i])
+    assert X_norm.shape == X_orig.shape, "Mismatch between X and X_original shapes."
+
+    print("Applying binary HED masking...")
+    X_masked = np.array([
+        apply_HED_mask(X_norm[i], X_orig[i], threshold=threshold)
         for i in range(len(X_norm))
     ], dtype=np.float32)
 
-    print(f"Saving HED-masked dataset to {output_file}...")
-    np.savez_compressed(output_file, X=X_HED, y=y, metadata=metadata)
-    print("Done")
+    print(f"Saving masked dataset to {output_file}...")
+    np.savez_compressed(output_file, X=X_masked, y=y, metadata=metadata)
+    print("Done.")
 
 if __name__ == "__main__":
     convert_to_HED_masked()

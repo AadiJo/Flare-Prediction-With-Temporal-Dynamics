@@ -4,7 +4,11 @@ import tensorflow as tf
 from tensorflow.keras.models import load_model
 from datetime import datetime
 
+<<<<<<< HEAD
 def load_latest_model(models_dir="models"):
+=======
+def load_latest_model(models_dir="../models"):
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
     """Load the most recent model from the models directory."""
     if not os.path.exists(models_dir):
         print(f"Models directory '{models_dir}' not found.")
@@ -44,7 +48,11 @@ def retrain_model(model, X_train, y_train, X_val=None, y_val=None, epochs=5, bat
 def save_model(model, prefix="retrained"):
     """Save the retrained model."""
     # Create models directory if it doesn't exist
+<<<<<<< HEAD
     models_dir = "models"
+=======
+    models_dir = "../models"
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
     os.makedirs(models_dir, exist_ok=True)
 
     # Generate a timestamp for the model name

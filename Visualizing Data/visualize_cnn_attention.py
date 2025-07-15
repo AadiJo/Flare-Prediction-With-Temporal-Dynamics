@@ -35,7 +35,12 @@ class CNNVisualizationTool:
         self.ensemble_dir = config.get('ensemble_dir', os.path.dirname(config_path))
         console.print(f"[cyan]Loading {len(config['models'])} models...[/cyan]")
         for channel_name in config['models']:
+<<<<<<< HEAD
             model_path = os.path.join(self.ensemble_dir, f"solar_flare_model_{channel_name}.keras")
+=======
+            model_filename = f"solar_flare_model_{channel_name}.keras"
+            model_path = os.path.normpath(os.path.join(self.ensemble_dir, model_filename))
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
             try:
                 if not os.path.exists(model_path): raise FileNotFoundError(f"Model file not found: {model_path}")
                 self.models[channel_name] = load_model(model_path)
@@ -176,7 +181,11 @@ class CNNVisualizationTool:
 def load_sample_data():
     try:
         console.print("[cyan]Loading sample data...[/cyan]")
+<<<<<<< HEAD
         with np.load('processed_solar_data.npz') as data: X, y = data['X'], data['y']
+=======
+        with np.load('processed_HED_data.npz') as data: X, y = data['X'], data['y']
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         console.print(f"[green]Loaded data with shape:[/green] X={X.shape}, y={y.shape}")
         return X, y
     except Exception as e:

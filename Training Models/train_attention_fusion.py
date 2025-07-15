@@ -20,12 +20,17 @@ import matplotlib.pyplot as plt
 console = Console()
 
 class AttentionFusionTrainer:
+<<<<<<< HEAD
     def __init__(self, ensemble_config_path=None, use_channels=None):
+=======
+    def __init__(self, ensemble_config_path=None, use_channels=None, ensemble_dir=None):
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         self.base_models = {}
         self.channel_names = []
         self.fusion_model = None
         self.class_names = ['No Flare', 'Flare']  # Binary classification to match base models
         self.num_classes = 2
+<<<<<<< HEAD
         
         # Configure which channels/models to use - modify this list as needed
         # Available: ['Bp', 'Br', 'Bt', 'continuum']
@@ -33,11 +38,20 @@ class AttentionFusionTrainer:
         
         # Load existing ensemble configuration
         config_path = ensemble_config_path or self.find_latest_ensemble_config()
+=======
+        self.use_channels = use_channels or ['Bp', 'Br', 'Bt', 'continuum']
+        # Ask user for ensemble directory if not provided
+        if ensemble_dir is None:
+            ensemble_dir = self.prompt_for_ensemble_dir()
+        # Load ensemble config from selected directory
+        config_path = ensemble_config_path or os.path.join(ensemble_dir, "ensemble_config.json")
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         if config_path and os.path.exists(config_path):
             self.load_base_models(config_path)
         else:
             console.print("[red]No ensemble configuration found. Please train base models first.[/red]")
             sys.exit(1)
+<<<<<<< HEAD
     
     def find_latest_ensemble_config(self):
         """Find the latest ensemble configuration file"""
@@ -56,6 +70,37 @@ class AttentionFusionTrainer:
             latest_ensemble_dir = max(ensemble_dirs)
             config_path = os.path.join(models_dir, latest_ensemble_dir, "ensemble_config.json")
             return config_path if os.path.exists(config_path) else None
+=======
+        self.ensemble_dir = ensemble_dir
+
+    def prompt_for_ensemble_dir(self):
+        """Prompt user to select an ensemble directory from models folder"""
+        models_dir = "models"
+        if not os.path.exists(models_dir):
+            console.print(f"[red]Models directory not found: {models_dir}[/red]")
+            sys.exit(1)
+        ensemble_dirs = [d for d in os.listdir(models_dir)
+                        if os.path.isdir(os.path.join(models_dir, d)) and d.startswith('ensemble_')]
+        if not ensemble_dirs:
+            console.print(f"[red]No ensemble directories found in: {models_dir}[/red]")
+            sys.exit(1)
+        console.print("\n[bold cyan]Select an ensemble directory to use:[/bold cyan]")
+        for idx, d in enumerate(ensemble_dirs):
+            console.print(f"  [{idx}] {d}")
+        while True:
+            try:
+                choice = int(console.input("Enter the number of the directory to use: "))
+                if 0 <= choice < len(ensemble_dirs):
+                    selected_dir = os.path.join(models_dir, ensemble_dirs[choice])
+                    console.print(f"[green]Selected ensemble directory:[/green] {selected_dir}")
+                    return selected_dir
+            except Exception:
+                pass
+            console.print("[red]Invalid selection. Please try again.[/red]")
+    
+    def find_latest_ensemble_config(self):
+        # Deprecated: now user selects ensemble dir interactively
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         return None
     
     def load_base_models(self, config_path):
@@ -216,7 +261,11 @@ class AttentionFusionTrainer:
         callbacks = [
             EarlyStopping(
                 monitor='val_loss',
+<<<<<<< HEAD
                 patience=15,
+=======
+                patience=20,
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
                 restore_best_weights=True,
                 verbose=1
             ),
@@ -293,6 +342,7 @@ class AttentionFusionTrainer:
     
     def save_attention_model(self, results, output_dir=None):
         """Save the trained attention fusion model and configuration"""
+<<<<<<< HEAD
         # Use the same directory as the ensemble models by default
         if output_dir is None:
             config_path = self.find_latest_ensemble_config()
@@ -310,6 +360,16 @@ class AttentionFusionTrainer:
         fusion_model_path = os.path.join(output_dir, 'attention_fusion_model.keras')
         self.fusion_model.save(fusion_model_path)
         
+=======
+        # Use the selected ensemble directory by default
+        if output_dir is None:
+            output_dir = getattr(self, 'ensemble_dir', 'models')
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        # Save the fusion model
+        fusion_model_path = os.path.join(output_dir, 'attention_fusion_model.keras')
+        self.fusion_model.save(fusion_model_path)
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         # Save configuration
         config = {
             'model_type': 'attention_fusion',
@@ -321,6 +381,7 @@ class AttentionFusionTrainer:
             'num_classes': self.num_classes,
             'class_names': self.class_names
         }
+<<<<<<< HEAD
         
         config_path = os.path.join(output_dir, 'attention_fusion_config.json')
         with open(config_path, 'w') as f:
@@ -329,6 +390,13 @@ class AttentionFusionTrainer:
         console.print(f"[green]Attention fusion model saved to:[/green] {fusion_model_path}")
         console.print(f"[green]Configuration saved to:[/green] {config_path}")
         
+=======
+        config_path = os.path.join(output_dir, 'attention_fusion_config.json')
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+        console.print(f"[green]Attention fusion model saved to:[/green] {fusion_model_path}")
+        console.print(f"[green]Configuration saved to:[/green] {config_path}")
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         return config_path
     
     def print_results(self, results):
@@ -367,23 +435,47 @@ class AttentionFusionTrainer:
         # Classification Report
         report = classification_report(results['y_true'], results['y_pred'], 
                                      target_names=self.class_names, output_dict=True, zero_division=0)
+<<<<<<< HEAD
         
+=======
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         report_table = Table(title="Classification Report", box=box.ROUNDED)
         report_table.add_column("Class", style="cyan")
         report_table.add_column("Precision", style="green")
         report_table.add_column("Recall", style="yellow")
         report_table.add_column("F1-Score", style="magenta")
+<<<<<<< HEAD
         
         for class_name in self.class_names:
             if class_name.lower().replace(' ', '_') in report:
                 class_report = report[class_name.lower().replace(' ', '_')]
+=======
+
+        # The keys in report dict are exactly the names in target_names
+        for class_name in self.class_names:
+            if class_name in report:
+                class_report = report[class_name]
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
                 report_table.add_row(
                     class_name,
                     f"{class_report['precision']:.3f}",
                     f"{class_report['recall']:.3f}",
                     f"{class_report['f1-score']:.3f}"
                 )
+<<<<<<< HEAD
         
+=======
+        # Optionally add macro/micro/weighted avg
+        for avg_type in ["macro avg", "weighted avg"]:
+            if avg_type in report:
+                avg_report = report[avg_type]
+                report_table.add_row(
+                    avg_type,
+                    f"{avg_report['precision']:.3f}",
+                    f"{avg_report['recall']:.3f}",
+                    f"{avg_report['f1-score']:.3f}"
+                )
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         console.print(report_table)
 
 def main():
@@ -394,17 +486,29 @@ def main():
         # Load processed data
         try:
             console.print("[cyan]Loading processed solar data...[/cyan]")
+<<<<<<< HEAD
             with np.load('processed_solar_data.npz') as data:
+=======
+            with np.load('processed_HED_data.npz') as data:
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
                 X = data['X']
                 y = data['y']
             console.print(f"[green]Data loaded:[/green] X shape: {X.shape}, y shape: {y.shape}")
         except FileNotFoundError:
+<<<<<<< HEAD
             console.print("[red]processed_solar_data.npz not found! Please run your data preprocessing script first.[/red]")
             return
         
         # Initialize trainer
         trainer = AttentionFusionTrainer()
         
+=======
+            console.print("[red]processed_HED_data.npz not found! Please run your data preprocessing script first.[/red]")
+            return
+        
+        # Initialize trainer (user will be prompted to select ensemble directory)
+        trainer = AttentionFusionTrainer()
+>>>>>>> 2e83ace1dbaad6a0734e6a9bc820ded9df6f2c11
         # Alternative: Use only specific channels
         # trainer = AttentionFusionTrainer(use_channels=['Bp', 'Br', 'Bt'])  # Example: use only 3 channels
         # trainer = AttentionFusionTrainer(use_channels=['Bp', 'continuum'])  # Example: use only 2 channels
