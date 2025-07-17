@@ -32,3 +32,4 @@ Training Models/__pycache__/
 models.txt
 test_gauss.py
 ai_venv
+test_keywords.py
