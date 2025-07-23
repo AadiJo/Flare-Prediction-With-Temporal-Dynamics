@@ -12,10 +12,11 @@ import aiofiles
 import glob
 
 load_dotenv()
-GET_FLARE_DATA_FIRST = False
+GET_FLARE_DATA_FIRST = False 
 PROGRESS_FILE = "download_progress_async.json"
 FAILED_DOWNLOADS_FILE = "failed_downloads.json"
-MIN_DATE = '2023-06-18'
+INCOMPLETE_DOWNLOADS_FILE = "incomplete_downloads.json"
+MIN_DATE = '2009-06-18'
 
 # --- Main Async Function Stuffs ---
 
@@ -45,12 +46,17 @@ async def download_file(session, url, path, max_retries=3):
 async def _update_json_list(lock, item, item_list, filepath):
     """Safely appends an item to a list and writes it to a JSON file."""
     async with lock:
-        if item not in item_list:
+        # Check for duplicates if the item is a dictionary with a 'key'
+        if isinstance(item, dict) and 'key' in item:
+            if not any(d.get('key') == item['key'] for d in item_list if isinstance(d, dict)):
+                item_list.append(item)
+        elif item not in item_list:
             item_list.append(item)
-            with open(filepath, "w") as f:
-                json.dump(item_list, f, indent=4)
+        
+        with open(filepath, "w") as f:
+            json.dump(item_list, f, indent=4)
 
-async def download_sharp_time_series_async(client, harpnum, time_points_str, base_dir, flare_key, progress_dict, failed_downloads, lock):
+async def download_sharp_time_series_async(client, harpnum, time_points_str, base_dir, flare_key, progress_dict, failed_downloads, incomplete_downloads, lock, time_steps_required):
     """Handles the entire pipeline for one time-series: DRMS query, download, and file organization."""
     try:
         if os.path.exists(base_dir): shutil.rmtree(base_dir)
@@ -58,7 +64,8 @@ async def download_sharp_time_series_async(client, harpnum, time_points_str, bas
         # 1. JSOC Export Request with Retry
         time_objects = [pd.to_datetime(ts) for ts in time_points_str]
         start_time, end_time = min(time_objects), max(time_objects)
-        query = f"hmi.sharp_cea_720s[{int(harpnum)}][{start_time.strftime('%Y.%m.%d_%H:%M:%S_TAI')}-{end_time.strftime('%Y.%m.%d_%H:%M:%S_TAI@1h')}]{{Bp, Bt, Br, continuum}}"
+        # The query remains the same, requesting data for the whole window at 1h cadence
+        query = f"hmi.sharp_cea_720s[{int(harpnum)}][{start_time.strftime('%Y.%m.%d_%H:%M:%S_TAI')}-{end_time.strftime('%Y.%m.%d_%H:%M:%S_TAI')}@1h]{{Bp, Bt, Br, continuum}}"
         
         export_request = None
         for attempt in range(5):
@@ -101,7 +108,17 @@ async def download_sharp_time_series_async(client, harpnum, time_points_str, bas
                 os.makedirs(timestep_dir, exist_ok=True)
                 os.rename(os.path.join(base_dir, filename), os.path.join(timestep_dir, filename))
 
-        # 4. Update Progress
+        # Verify Timestep Count
+        num_timesteps_found = len([d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d)) and d.startswith('timestep_')])
+        if num_timesteps_found < time_steps_required:
+            print(f"✗ Incomplete download for {flare_key}: Found {num_timesteps_found}/{time_steps_required} timesteps.")
+            # Log the incomplete download with details
+            incomplete_info = {"key": flare_key, "found": num_timesteps_found, "required": time_steps_required}
+            await _update_json_list(lock, incomplete_info, incomplete_downloads, INCOMPLETE_DOWNLOADS_FILE)
+            shutil.rmtree(base_dir) # Clean up the incomplete directory
+            return False # Signal failure so it's not counted towards progress
+
+        # 5. Update Progress if successful
         progress_key = "preflare" if "flare" in base_dir else "quiet"
         async with lock:
             if flare_key not in progress_dict[progress_key]:
@@ -114,6 +131,7 @@ async def download_sharp_time_series_async(client, harpnum, time_points_str, bas
     except Exception as e:
         print(f"✗ Error processing time series for {flare_key}: {e}")
         await _update_json_list(lock, flare_key, failed_downloads, FAILED_DOWNLOADS_FILE)
+        if os.path.exists(base_dir): shutil.rmtree(base_dir) # Clean up on error
         return False
 
 # --- Helper Functions ---
@@ -146,6 +164,12 @@ async def main():
         with open(FAILED_DOWNLOADS_FILE, "r") as f: failed_downloads = json.load(f)
     except FileNotFoundError:
         failed_downloads = []
+    
+    # Load incomplete downloads log
+    try:
+        with open(INCOMPLETE_DOWNLOADS_FILE, "r") as f: incomplete_downloads = json.load(f)
+    except FileNotFoundError:
+        incomplete_downloads = []
 
     try:
         noaa_to_harp = load_noaa_to_harpnum_map_local()
@@ -168,20 +192,25 @@ async def main():
     non_m_x_flares = df[~df['goes_class'].str.startswith(('M', 'X')) & (pd.to_datetime(df['start_time']) <= pd.Timestamp('2025-07-23'))]
     non_m_x_flares = non_m_x_flares.sample(frac=1, random_state=42).reset_index(drop=True)
 
-    NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 0, 1196
+    NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 1570, 1600
     TIME_STEPS, PREDICTION_HORIZON, BATCH_SIZE = 12, 12, 5
 
-    async def process_data(data_df, num_samples, progress_key, data_label):
+    async def process_data(data_df, num_samples, progress_key, data_label, time_steps_required, incomplete_downloads):
         print(f"\nProcessing {num_samples} {data_label} samples...")
         lock = asyncio.Lock()
         
+        # This loop handles the quiet data by continuing until the target is met.
+        # For flare data, it will stop if it runs out of flares in the dataframe.
         while len(processed_flares[progress_key]) < num_samples:
             tasks, batch_keys = [], []
             for row in data_df.itertuples():
                 if len(processed_flares[progress_key]) + len(tasks) >= num_samples: break
                 
                 item_key = f"{int(row.noaa_active_region)}_{pd.to_datetime(row.peak_time).strftime('%Y%m%d_%H%M')}"
-                if item_key in processed_flares[progress_key] or item_key in failed_downloads: continue
+                
+                # Also skip items that were previously found to be incomplete
+                if item_key in processed_flares[progress_key] or item_key in failed_downloads or any(d.get('key') == item_key for d in incomplete_downloads if isinstance(d, dict)):
+                    continue
 
                 harpnum = get_harpnum_for_noaa(row.noaa_active_region, noaa_to_harp)
                 if not harpnum: continue
@@ -194,9 +223,9 @@ async def main():
 
                 peak_time = pd.to_datetime(row.peak_time)
                 flare_minus_12h = peak_time - pd.Timedelta(hours=PREDICTION_HORIZON)
-                time_points = [(flare_minus_12h - pd.Timedelta(hours=(TIME_STEPS - t))).strftime('%Y-%m-%d %H:%M:%S') for t in range(1, TIME_STEPS + 1)]
+                time_points = [(flare_minus_12h - pd.Timedelta(hours=(time_steps_required - 1 - t))).strftime('%Y-%m-%d %H:%M:%S') for t in range(time_steps_required)]
                 
-                tasks.append(download_sharp_time_series_async(client, harpnum, time_points, base_dir, item_key, processed_flares, failed_downloads, lock))
+                tasks.append(download_sharp_time_series_async(client, harpnum, time_points, base_dir, item_key, processed_flares, failed_downloads, incomplete_downloads, lock, time_steps_required))
                 batch_keys.append(item_key)
                 if len(tasks) >= BATCH_SIZE: break
             
@@ -209,6 +238,7 @@ async def main():
             print(f"Overall progress: {len(processed_flares[progress_key])}/{num_samples} completed.")
             if len(processed_flares[progress_key]) < num_samples: await asyncio.sleep(7)
 
+    # Pass TIME_STEPS and incomplete_downloads to the processing function
     data_sets = [
         (m_x_flares, NUM_PREFLARE_SAMPLES, "preflare", "flare"),
         (non_m_x_flares, NUM_QUIET_SAMPLES, "quiet", "quiet")
@@ -216,10 +246,12 @@ async def main():
     if not GET_FLARE_DATA_FIRST: data_sets.reverse()
     
     for df, num, key, label in data_sets:
-        if num > 0: await process_data(df, num, key, label)
+        if num > 0: await process_data(df, num, key, label, TIME_STEPS, incomplete_downloads)
 
     print(f"\n--- Finished ---\nPre-flare samples: {len(processed_flares['preflare'])}/{NUM_PREFLARE_SAMPLES}\nQuiet samples: {len(processed_flares['quiet'])}/{NUM_QUIET_SAMPLES}")
     if failed_downloads: print(f"Total failed downloads: {len(failed_downloads)}")
+    if incomplete_downloads: print(f"Total incomplete downloads: {len(incomplete_downloads)}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
