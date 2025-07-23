@@ -25,8 +25,6 @@ def convert_to_HED_masked(input_file='processed_solar_data.npz',
     data = np.load(input_file, allow_pickle=True)
     X_norm = data['X']
     X_orig = data['X_original']
-    y = data['y']
-    metadata = data['metadata']
 
     assert X_norm.shape == X_orig.shape, "Mismatch between X and X_original shapes."
 
@@ -37,7 +35,10 @@ def convert_to_HED_masked(input_file='processed_solar_data.npz',
     ], dtype=np.float32)
 
     print(f"Saving masked dataset to {output_file}...")
-    np.savez_compressed(output_file, X=X_masked, y=y, metadata=metadata)
+    # Save all original keys except 'X', replace with X_masked
+    save_dict = {key: data[key] for key in data.files if key != 'X'}
+    save_dict['X'] = X_masked
+    np.savez_compressed(output_file, **save_dict)
     print("Done.")
 
 if __name__ == "__main__":

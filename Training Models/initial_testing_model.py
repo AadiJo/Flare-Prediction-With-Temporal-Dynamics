@@ -37,7 +37,7 @@ def load_latest_model(models_dir="../models"):
 print("Loading pre-processed data...")
 
 # Loads pre-processed solar data from a compressed NumPy archive file (x is input features, y is the target labels)
-with np.load('processed_solar_data.npz') as data:
+with np.load('processed_HED_data.npz') as data:
     X = data['X']
     y = data['y']
 

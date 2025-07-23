@@ -318,13 +318,13 @@ async def main():
         return
     df = pd.read_csv(FLARE_CSV).dropna(subset=['noaa_active_region', 'goes_class'])
     df['noaa_active_region'] = df['noaa_active_region'].astype(int)
-    df = df[pd.to_datetime(df['peak_time']) >= pd.Timestamp('2010-05-01')]
+    df = df[pd.to_datetime(df['start_time']) >= pd.Timestamp('2010-05-01')]
     # Apply minimum date filter
-    df = df[pd.to_datetime(df['peak_time']) >= pd.Timestamp(MIN_DATE)]
+    df = df[pd.to_datetime(df['start_time']) >= pd.Timestamp(MIN_DATE)]
     m_x_flares = df[df['goes_class'].str.startswith(('M', 'X'))]
-    QUIET_END_DATE = '2024-05-29'
+    QUIET_END_DATE = '2025-07-23'
     non_m_x_flares = df[~df['goes_class'].str.startswith(('M', 'X'))]
-    non_m_x_flares = non_m_x_flares[pd.to_datetime(non_m_x_flares['peak_time']) <= pd.Timestamp(QUIET_END_DATE)]
+    non_m_x_flares = non_m_x_flares[pd.to_datetime(non_m_x_flares['start_time']) <= pd.Timestamp(QUIET_END_DATE)]
     non_m_x_flares = non_m_x_flares.sample(frac=1, random_state=42).reset_index(drop=True)
     
     NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 0, 1196
