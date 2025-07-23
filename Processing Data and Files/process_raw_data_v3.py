@@ -12,8 +12,8 @@ warnings.filterwarnings('ignore', category=RuntimeWarning)
 JSOC_DIR = "../HSRA/async_sharp"
 OUTPUT_FILE = 'processed_solar_data.npz'
 COMBINE_EXTERNAL_NPZ = False
-EXTERNAL_NPZ_FILE = 'processed_solar_data_end.npz' 
-IMAGE_HEIGHT, IMAGE_WIDTH, SEQUENCE_LENGTH = 64, 64, 6
+EXTERNAL_NPZ_FILE = 'processed_solar_data_end.npz'
+IMAGE_HEIGHT, IMAGE_WIDTH, SEQUENCE_LENGTH = 128, 128, 6
 PREFERRED_SEGMENTS = ["Bp", "Bt", "Br", "continuum"]
 SHARP_KEYWORDS = ["USFLUX", "MEANSHR", "TOTUSJZ", "SHRGT45", "TOTPOT"]  # FITS header keywords to extract
 

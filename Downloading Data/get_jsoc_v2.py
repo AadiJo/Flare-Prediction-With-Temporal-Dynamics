@@ -7,7 +7,6 @@ import json
 import random
 
 load_dotenv()
-# SEGMENTS = ["magnetogram", "continuum", "Dopplergram"]
 GET_FLARE_DATA_FIRST = True
 
 PROGRESS_FILE = "download_progress.json"
