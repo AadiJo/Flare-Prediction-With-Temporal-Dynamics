@@ -35,3 +35,5 @@ test_gauss.py
 ai_venv
 test_keywords.py
 incomplete_downloads.json
+all_data.npz
+random_stuff/
