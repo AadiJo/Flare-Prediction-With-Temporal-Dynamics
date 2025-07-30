@@ -14,21 +14,22 @@ import random
 # Define channel names corresponding to the 4 magnetic field components
 CHANNEL_NAMES = ['Bp', 'Br', 'Bt', 'continuum']
 
-# Add a global flag to toggle reproducibility
-enable_reproducibility = True
+def set_reproducibility(enable=True, seed=42):
+    """Set random seeds for reproducibility across Python, NumPy, and TensorFlow."""
+    if enable:
+        random.seed(seed)
+        np.random.seed(seed)
+        tf.random.set_seed(seed)
+        # For TensorFlow 2.19.0, use tf.config.experimental instead of environment variable
+        tf.config.experimental.enable_op_determinism()
+        print(f"Reproducibility enabled with fixed seed {seed}.")
+    else:
+        print("Reproducibility is disabled. Randomness may vary.")
 
-if enable_reproducibility:
-    # Set all random seeds
-    random.seed(42)
-    np.random.seed(42)
-    tf.random.set_seed(42)
-    
-    # For TensorFlow 2.19.0, use tf.config.experimental instead of environment variable
-    tf.config.experimental.enable_op_determinism()
-    
-    print("Reproducibility enabled with fixed seeds.")
-else:
-    print("Reproducibility is disabled. Randomness may vary.")
+# Toggle this to True/False to enable/disable reproducibility
+USE_REPRODUCIBILITY = True
+REPRO_SEED = 42
+set_reproducibility(USE_REPRODUCIBILITY, REPRO_SEED)
 
 def create_cnnlstm_model(input_shape, model_name):
     """Create a CNN-LSTM model for a specific channel."""
@@ -328,9 +329,19 @@ def main():
     X_val, X_test, y_val, y_test = train_test_split(
         X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp
     )
-    
+
     print(f"Data split - Training: {len(X_train)}, Validation: {len(X_val)}, Test: {len(X_test)}")
-    
+
+    # Log class distributions for each split
+    def log_class_dist(split_name, labels):
+        unique, counts = np.unique(labels, return_counts=True)
+        dist = dict(zip(unique.astype(str), counts))
+        print(f"Class distribution for {split_name}: {dist}")
+
+    log_class_dist("Training", y_train)
+    log_class_dist("Validation", y_val)
+    log_class_dist("Test", y_test)
+
     # Save shared test set
     test_set_path = os.path.join(ensemble_dir, 'test_set.npz')
     np.savez_compressed(test_set_path, X_test=X_test, y_test=y_test)

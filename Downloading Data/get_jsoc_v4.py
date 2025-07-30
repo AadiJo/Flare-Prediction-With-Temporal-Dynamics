@@ -192,7 +192,7 @@ async def main():
     non_m_x_flares = df[~df['goes_class'].str.startswith(('M', 'X')) & (pd.to_datetime(df['start_time']) <= pd.Timestamp('2025-07-23'))]
     non_m_x_flares = non_m_x_flares.sample(frac=1, random_state=42).reset_index(drop=True)
 
-    NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 1570, 1600
+    NUM_PREFLARE_SAMPLES, NUM_QUIET_SAMPLES = 0, 1600
     TIME_STEPS, PREDICTION_HORIZON, BATCH_SIZE = 12, 12, 5
 
     async def process_data(data_df, num_samples, progress_key, data_label, time_steps_required, incomplete_downloads):
@@ -206,7 +206,7 @@ async def main():
             for row in data_df.itertuples():
                 if len(processed_flares[progress_key]) + len(tasks) >= num_samples: break
                 
-                item_key = f"{int(row.noaa_active_region)}_{pd.to_datetime(row.peak_time).strftime('%Y%m%d_%H%M')}"
+                item_key = f"{int(row.noaa_active_region)}_{pd.to_datetime(row.start_time).strftime('%Y%m%d_%H%M')}"
                 
                 # Also skip items that were previously found to be incomplete
                 if item_key in processed_flares[progress_key] or item_key in failed_downloads or any(d.get('key') == item_key for d in incomplete_downloads if isinstance(d, dict)):
@@ -215,14 +215,14 @@ async def main():
                 harpnum = get_harpnum_for_noaa(row.noaa_active_region, noaa_to_harp)
                 if not harpnum: continue
 
-                base_dir = f"D:/async_sharp/{data_label}_case_{harpnum}_NOAA_{int(row.noaa_active_region)}_{pd.to_datetime(row.peak_time).strftime('%Y%m%d_%H%M')}"
+                base_dir = f"D:/async_sharp/{data_label}_case_{harpnum}_NOAA_{int(row.noaa_active_region)}_{pd.to_datetime(row.start_time).strftime('%Y%m%d_%H%M')}"
                 if os.path.exists(base_dir) and glob.glob(os.path.join(base_dir, '**', '*.fits'), recursive=True):
                     print(f"Found existing data for {item_key}, skipping...")
                     await _update_json_list(lock, item_key, processed_flares[progress_key], PROGRESS_FILE)
                     continue
 
-                peak_time = pd.to_datetime(row.peak_time)
-                flare_minus_12h = peak_time - pd.Timedelta(hours=PREDICTION_HORIZON)
+                start_time = pd.to_datetime(row.start_time)
+                flare_minus_12h = start_time - pd.Timedelta(hours=PREDICTION_HORIZON)
                 time_points = [(flare_minus_12h - pd.Timedelta(hours=(time_steps_required - 1 - t))).strftime('%Y-%m-%d %H:%M:%S') for t in range(time_steps_required)]
                 
                 tasks.append(download_sharp_time_series_async(client, harpnum, time_points, base_dir, item_key, processed_flares, failed_downloads, incomplete_downloads, lock, time_steps_required))

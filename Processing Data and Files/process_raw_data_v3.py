@@ -1,15 +1,15 @@
 import os, re, numpy as np, multiprocessing as mp, warnings
 from datetime import datetime, timedelta
 from astropy.io import fits
-from skimage.transform import resize
 from pathlib import Path
 from tqdm import tqdm
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from skimage.transform import resize
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 # Constants
-JSOC_DIR = "../HSRA/async_sharp"
+JSOC_DIR = "D:/async_sharp"
 OUTPUT_FILE = 'processed_solar_data.npz'
 COMBINE_EXTERNAL_NPZ = False
 EXTERNAL_NPZ_FILE = 'processed_solar_data_end.npz'
@@ -204,7 +204,7 @@ def process_case_folder(case_folder_path, available_segments):
         label = 1 if case_folder.name.startswith('flare_case_') else 0
         timestep_folders = sorted([f for f in case_folder.iterdir() if f.is_dir() and f.name.startswith('timestep_')])
         
-        if len(timestep_folders) != 6: return None
+        if len(timestep_folders) != 12: return None
         
         timestep_data = []
         for folder in timestep_folders:

@@ -18,7 +18,7 @@ def apply_HED_mask(seq_norm, seq_orig, threshold=1e4):
 
     return masked_seq
 
-def convert_to_HED_masked(input_file='processed_solar_data.npz',
+def convert_to_HED_masked(input_file='all_data.npz',
                           output_file='processed_HED_data.npz',
                           threshold=1e4):
     print(f"Loading {input_file}...")
